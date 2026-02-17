@@ -128,6 +128,11 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
     { q: 'Do I need a headphone amplifier?', a: 'It depends on impedance and sensitivity. Most IEMs and low-impedance headphones (16-32Ω) work fine from a phone. High-impedance models (250Ω+) or low-sensitivity planars typically need a dedicated amp.' },
     { q: 'What is the Harman target curve?', a: 'The Harman target is a frequency response curve developed through listener preference research. It features a slight bass boost and gentle treble rolloff, representing what most listeners find pleasing.' },
   ],
+  'audio-to-video': [
+    { q: 'What does this tool do?', a: 'It combines an audio file with an optional background image to create an MP4 video. Perfect for uploading podcasts or music to YouTube.' },
+    { q: 'Do I need to provide an image?', a: 'No. If no image is provided, a solid black frame is used. If you upload an image, it will be scaled and cropped to fill the chosen resolution.' },
+    { q: 'What resolutions are available?', a: '1920×1080 (16:9), 1280×720 (16:9), 1080×1080 (square), and 1080×1920 (vertical for Shorts/TikTok).' },
+  ],
 };
 
 /**

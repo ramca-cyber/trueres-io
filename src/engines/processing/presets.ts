@@ -170,6 +170,37 @@ export function videoToGifArgs(
   ];
 }
 
+// ── Audio to Video (static image + audio → MP4) ──
+
+export function audioToVideoArgs(
+  audioInput: string,
+  imageInput: string | null,
+  outputName: string,
+  width: number,
+  height: number
+): string[] {
+  if (imageInput) {
+    return [
+      '-loop', '1', '-i', imageInput,
+      '-i', audioInput,
+      '-vf', `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
+      '-c:v', 'libx264', '-tune', 'stillimage', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '192k',
+      '-shortest',
+      outputName,
+    ];
+  }
+  // No image — generate a black frame
+  return [
+    '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=1`,
+    '-i', audioInput,
+    '-c:v', 'libx264', '-tune', 'stillimage', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', '192k',
+    '-shortest',
+    outputName,
+  ];
+}
+
 // ── Video convert ──
 
 export const VIDEO_OUTPUT_FORMATS = [
