@@ -1,4 +1,4 @@
-import { useRef, useEffect, type RefObject } from 'react';
+import { useRef, useEffect, useState, type RefObject } from 'react';
 import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface LoudnessHistoryCanvasProps {
@@ -22,7 +22,7 @@ export function LoudnessHistoryCanvas({
 }: LoudnessHistoryCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement>(null);
   const ref = externalRef || internalRef;
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
   const rafRef = useRef<number>(0);
 
   // ResizeObserver
@@ -34,10 +34,10 @@ export function LoudnessHistoryCanvas({
         const dpr = window.devicePixelRatio || 1;
         const w = Math.round(entry.contentRect.width * dpr);
         const h = Math.round(entry.contentRect.height * dpr);
-        if (w > 0 && h > 0 && (w !== sizeRef.current.w || h !== sizeRef.current.h)) {
-          sizeRef.current = { w, h };
+        if (w > 0 && h > 0) {
           canvas.width = w;
           canvas.height = h;
+          setCanvasSize({ w, h });
         }
       }
     });
@@ -164,7 +164,7 @@ export function LoudnessHistoryCanvas({
     ctx.font = `${labelFontSize}px sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText('LUFS', paddingLeft + 4, paddingTop + 12);
-  }, [shortTerm, momentary, viewport, ref, sizeRef.current.w, sizeRef.current.h]);
+  }, [shortTerm, momentary, viewport, ref, canvasSize.w, canvasSize.h]);
 
   // Crosshair overlay via rAF
   useEffect(() => {

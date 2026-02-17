@@ -89,6 +89,7 @@ const SpectrumAnalyzer = () => {
                 zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
                 fullscreen={{ containerRef }}
                 download={{ canvasRef: viz.canvasRef, filename: `${fileName}-spectrum.png` }}
+                onNewFile={() => useAudioStore.getState().clear()}
               />
               <SpectrumCanvas
                 data={spectrumData as unknown as SpectrumData}
@@ -98,15 +99,10 @@ const SpectrumAnalyzer = () => {
                 canvasHandlers={viz.handlers}
                 canvasRef={viz.canvasRef}
               />
-              {viz.isZoomed && (
-                <p className="text-xs text-muted-foreground">Scroll to zoom freq · Shift+scroll to zoom dB · Drag to pan · Double-click to reset</p>
-              )}
+              <p className={`text-xs text-muted-foreground ${viz.isZoomed ? '' : 'invisible'}`}>Scroll to zoom freq · Shift+scroll to zoom dB · Drag to pan · Double-click to reset</p>
             </div>
           </>
         )}
-        <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
-          Analyze another file
-        </Button>
       </div>
     </ToolPage>
   );

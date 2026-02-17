@@ -84,6 +84,7 @@ const LufsMeter = () => {
                     zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
                     fullscreen={{ containerRef }}
                     download={{ canvasRef: viz.canvasRef, filename: `${fileName}-loudness.png` }}
+                    onNewFile={() => useAudioStore.getState().clear()}
                   />
                   <LoudnessHistoryCanvas
                     shortTerm={lufs.shortTerm}
@@ -94,9 +95,7 @@ const LufsMeter = () => {
                     canvasHandlers={viz.handlers}
                     canvasRef={viz.canvasRef}
                   />
-                  {viz.isZoomed && (
-                    <p className="text-xs text-muted-foreground">Scroll to zoom time · Shift+scroll to zoom LUFS · Drag to pan · Double-click to reset</p>
-                  )}
+                  <p className={`text-xs text-muted-foreground ${viz.isZoomed ? '' : 'invisible'}`}>Scroll to zoom time · Shift+scroll to zoom LUFS · Drag to pan · Double-click to reset</p>
                 </div>
               )}
 
@@ -106,10 +105,6 @@ const LufsMeter = () => {
               </div>
             </>
           )}
-
-          <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
-            Analyze another file
-          </Button>
         </div>
       )}
     </ToolPage>
