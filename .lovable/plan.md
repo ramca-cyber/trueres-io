@@ -1,150 +1,91 @@
 
-# Enrich Video Tools, Generators, and Remaining Gaps
+# Universal Media Player Tool
 
 ## Overview
 
-Apply the same "preview before you commit" philosophy from audio tools to video tools and generators. Also fix several items missed in previous passes.
+Add a new "Media Player" tool that accepts any audio or video file and plays it immediately with the native browser controls. No processing, no analysis -- just drag, drop, and play. This fills a gap: users currently must pick a specific tool to hear/see their file, but sometimes they just want to play it.
 
-## 1. Video Preview Player (biggest gap)
+## What It Does
 
-None of the 7 video tools show a `<video>` preview of the input file or the processed output. Users drop a video and see only a filename -- they can't verify it's the right file or preview the result.
+- Accepts all supported audio AND video formats (WAV, FLAC, MP3, OGG, AAC, M4A, AIFF, MP4, WebM, AVI, MKV, MOV)
+- Auto-detects whether the file is audio or video based on extension
+- Shows the appropriate player (`<audio>` or `<video>`) with native controls
+- Displays file info (name, size, type) in a `FileInfoBar`
+- "Choose different file" button to swap files quickly
+- No FFmpeg, no Web Audio API decoding -- pure native browser playback
 
-### New Component: `VideoPlayer.tsx`
+## New Files
 
-A minimal video player component, mirroring `AudioPlayer.tsx`:
-- Native `<video controls>` element with `preload="metadata"`
-- `URL.createObjectURL` / `revokeObjectURL` lifecycle
-- Props: `src: File | Blob`, `label?: string`, `className?: string`
-- Max height constrained (e.g. `max-h-[360px]`) so it doesn't overwhelm the page
-- `[color-scheme:dark]` for dark mode consistency
+### `src/pages/tools/MediaPlayer.tsx`
 
-### Integration
+The tool page itself. Simple flow:
+1. Drop zone accepting `ALL_MEDIA_ACCEPT` formats
+2. On file select, check extension to determine audio vs video
+3. Render `AudioPlayer` or `VideoPlayer` accordingly
+4. Show `FileInfoBar` with file details
+5. "Choose different file" button
 
-| Tool | Input preview | Output preview |
-|------|--------------|----------------|
-| Video Trimmer | Yes -- lets users see timestamps to know where to cut | Yes |
-| Video Compressor | Yes | Yes -- compare quality visually |
-| Video Converter | Yes | Yes |
-| Video Mute | Yes -- verify it's the right video | Yes |
-| Video to GIF | Yes | Yes -- show the GIF inline (`<img>`) |
-| Video to MP3 | Yes -- verify video before extracting audio | No (audio output, already has AudioPlayer) |
-| Video to Audio | Yes | No (audio output, already has AudioPlayer) |
+### Tool Registry Entry
 
-### VideoToGif special case
-Output is a GIF, not a video. Show it with an `<img>` tag instead of `<video>`, using the same object URL pattern.
+```text
+id: 'media-player'
+name: 'Media Player'
+shortName: 'Player'
+route: '/media-player'
+category: 'reference'          (fits with utilities/reference -- no processing involved)
+engine: 'none'
+icon: 'Play'
+acceptsFormats: all audio + video formats
+keywords: ['play', 'media player', 'audio player', 'video player', 'preview', 'listen']
+```
 
-## 2. Video Trimmer -- Use Video Player for Timestamp Selection
+### Route in App.tsx
 
-The Video Trimmer currently has blind number inputs. With the `<video>` player added:
-- The native video controls show the current playback time
-- Add a "Set Start to Current Time" / "Set End to Current Time" button pair
-- Users play the video, pause at the desired point, click "Set Start", then seek forward, click "Set End"
-- This mirrors the interactive waveform approach from the Audio Trimmer but using native video controls
+```text
+const MediaPlayer = lazy(() => import("./pages/tools/MediaPlayer"));
+// ...
+<Route path="/media-player" element={<MediaPlayer />} />
+```
 
-## 3. Generator Tool Enhancements
+### FAQ Entry
 
-### Tone Generator
-- **Bug fix**: Lines 66-70 update the oscillator directly during render (side effect outside useEffect). Move to a `useEffect` that watches `frequency`, `waveform`, `amplitude`.
-- **Live parameter update**: The noise generator can't update while playing (buffer-based). Add a note: "Stop and restart to apply changes" -- or regenerate the buffer on param change.
-
-### Noise Generator  
-- **Live update gap**: Changing noise type or level while playing does nothing because the buffer is pre-generated. Two options:
-  - Option A: Stop and restart automatically when params change while playing
-  - Option B: Show a subtle "Restart to apply" hint
-- Recommend Option A (auto-restart) for seamless UX.
-
-### Sweep Generator
-- **Double-wrapping bug**: Line 60 does `new Blob([wavData], { type: 'audio/wav' })` but `encodeWav()` already returns a `Blob`. This creates a Blob containing a Blob, which could cause download issues. Fix: use `encodeWav()` result directly.
-
-## 4. Missed Standardization Items
-
-### Unstyled "Analyze another file" buttons still remaining
-
-Two tools were missed in the previous standardization pass:
-- **FreqResponse.tsx** (line 53): Still uses raw `<button>` with inline styles
-- **WaveformImage.tsx** (line 125): Still uses raw `<button>` with inline styles
-
-Both need to be updated to the styled `<Button variant="outline" size="sm">` pattern.
-
-## 5. VideoConverter -- Size Comparison in Output
-
-`VideoConverter` output card (line 75) shows file size but no comparison to input. Add the same "X% smaller/larger" pattern used by VideoCompressor and other tools.
-
----
+Add a FAQ entry in `tool-faqs.ts` with common questions like "What formats are supported?" and "Is my file uploaded anywhere?"
 
 ## Technical Details
 
-### VideoPlayer component
+### Audio vs Video Detection
+
+Use the file extension to decide which player to show:
 
 ```text
-Props:
-  src: File | Blob
-  label?: string
-  className?: string
-
-Implementation:
-- useEffect with URL.createObjectURL / revokeObjectURL (identical pattern to AudioPlayer)
-- <video controls preload="metadata" className="w-full max-h-[360px] rounded-md">
-- [color-scheme:dark] for dark mode
-- Optional label as small text above
+const ext = file.name.split('.').pop()?.toLowerCase();
+const VIDEO_EXTS = ['mp4', 'webm', 'avi', 'mkv', 'mov'];
+const isVideo = VIDEO_EXTS.includes(ext);
 ```
 
-### Video Trimmer timestamp buttons
+If the extension is unrecognized, fall back to checking `file.type` (e.g., `video/*` vs `audio/*`). If still ambiguous, default to `<video>` (which can also play audio-only files).
 
-```text
-Two new buttons below the video player:
-  "Set Start" -- reads video.currentTime, sets startTime state
-  "Set End" -- reads video.currentTime, sets endTime state
+### Components Reused
 
-Requires a ref to the <video> element (exposed via VideoPlayer or a callback ref)
-```
-
-### Noise Generator auto-restart
-
-```text
-useEffect watching [noiseType, amplitude, playing]:
-  if (playing) { stopPlayback(); startPlayback(); }
-```
-
-### Tone Generator side-effect fix
-
-```text
-Move oscillator param updates from render body into:
-useEffect(() => {
-  if (oscRef.current && playing) {
-    oscRef.current.frequency.value = frequency;
-    oscRef.current.type = waveform;
-    if (gainRef.current) gainRef.current.gain.value = amplitude;
-  }
-}, [frequency, waveform, amplitude, playing]);
-```
+- `ToolPage` -- page wrapper with SEO, FAQ, cross-tool links
+- `FileDropZone` -- drag-and-drop with `ALL_MEDIA_ACCEPT`
+- `FileInfoBar` -- file name + size display
+- `AudioPlayer` -- native `<audio>` with dark mode styling and object URL lifecycle
+- `VideoPlayer` -- native `<video>` with dark mode styling and object URL lifecycle
+- `Button` -- "Choose different file" action
 
 ### Files to create
-- `src/components/shared/VideoPlayer.tsx`
+- `src/pages/tools/MediaPlayer.tsx`
 
 ### Files to modify
 | File | Change |
 |------|--------|
-| VideoTrimmer.tsx | Add VideoPlayer + "Set Start/End" buttons |
-| VideoCompressor.tsx | Add VideoPlayer input + output preview |
-| VideoConverter.tsx | Add VideoPlayer input + output preview + size comparison |
-| VideoMute.tsx | Add VideoPlayer input + output preview |
-| VideoToGif.tsx | Add VideoPlayer input + `<img>` output preview |
-| VideoToMp3.tsx | Add VideoPlayer input preview |
-| VideoToAudio.tsx | Add VideoPlayer input preview |
-| ToneGenerator.tsx | Fix render side-effect, move to useEffect |
-| NoiseGenerator.tsx | Auto-restart on param change while playing |
-| SweepGenerator.tsx | Fix double-Blob wrapping |
-| FreqResponse.tsx | Standardize "Analyze another file" button |
-| WaveformImage.tsx | Standardize "Choose different file" button |
+| `src/config/tool-registry.ts` | Add media-player tool definition |
+| `src/App.tsx` | Add lazy import + route |
+| `src/config/tool-faqs.ts` | Add FAQ entries for media-player |
 
 ### Implementation order
-1. Create `VideoPlayer.tsx` component
-2. Integrate into all 7 video tools (input + output previews)
-3. Add "Set Start/End to Current Time" to VideoTrimmer
-4. Add GIF preview to VideoToGif output
-5. Fix ToneGenerator render side-effect
-6. Fix NoiseGenerator live-update gap
-7. Fix SweepGenerator double-Blob bug
-8. Fix remaining unstyled buttons (FreqResponse, WaveformImage)
-9. Add size comparison to VideoConverter output
+1. Add tool definition to `tool-registry.ts`
+2. Create `MediaPlayer.tsx` page
+3. Add route in `App.tsx`
+4. Add FAQ entries
