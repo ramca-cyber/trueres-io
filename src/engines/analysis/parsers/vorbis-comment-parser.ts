@@ -81,3 +81,52 @@ export function parseFlacVorbisComments(buffer: ArrayBuffer): AudioMetadata {
 
   return { additionalTags: {} };
 }
+
+/**
+ * Find and parse Vorbis Comments in an OGG file
+ */
+export function parseOggVorbisComments(buffer: ArrayBuffer): AudioMetadata {
+  const u8 = new Uint8Array(buffer);
+  const view = new DataView(buffer);
+
+  // Find second OGG page (comment header)
+  // First page is identification header, second contains comments
+  let offset = 0;
+
+  // Skip pages looking for comment header
+  for (let page = 0; page < 10 && offset < buffer.byteLength - 27; page++) {
+    // Verify OGG page sync
+    if (u8[offset] !== 0x4F || u8[offset + 1] !== 0x67 ||
+        u8[offset + 2] !== 0x67 || u8[offset + 3] !== 0x53) break;
+
+    const numSegments = u8[offset + 26];
+    let pageDataSize = 0;
+    for (let s = 0; s < numSegments; s++) {
+      pageDataSize += u8[offset + 27 + s];
+    }
+    const dataStart = offset + 27 + numSegments;
+
+    if (page >= 1) {
+      // Check for Vorbis comment header (0x03 + "vorbis")
+      if (dataStart + 7 < buffer.byteLength && u8[dataStart] === 0x03) {
+        const sig = String.fromCharCode(u8[dataStart + 1], u8[dataStart + 2], u8[dataStart + 3],
+          u8[dataStart + 4], u8[dataStart + 5], u8[dataStart + 6]);
+        if (sig === 'vorbis') {
+          return parseVorbisComments(buffer, dataStart + 7, pageDataSize - 7);
+        }
+      }
+      // Check for OpusTags
+      if (dataStart + 8 < buffer.byteLength) {
+        const opusSig = String.fromCharCode(u8[dataStart], u8[dataStart + 1], u8[dataStart + 2],
+          u8[dataStart + 3], u8[dataStart + 4], u8[dataStart + 5], u8[dataStart + 6], u8[dataStart + 7]);
+        if (opusSig === 'OpusTags') {
+          return parseVorbisComments(buffer, dataStart + 8, pageDataSize - 8);
+        }
+      }
+    }
+
+    offset = dataStart + pageDataSize;
+  }
+
+  return { additionalTags: {} };
+}

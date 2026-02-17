@@ -8,6 +8,7 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
+import { useAudioStore } from '@/stores/audio-store';
 import { type SpectrumData } from '@/types/analysis';
 
 const tool = getToolById('freq-response')!;
@@ -49,6 +50,9 @@ const FreqResponse = () => {
             <SpectrumCanvas data={spectrumData as unknown as SpectrumData} showOctaveBands={false} height={350} />
           </div>
         )}
+        <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          Analyze another file
+        </button>
       </div>
     </ToolPage>
   );

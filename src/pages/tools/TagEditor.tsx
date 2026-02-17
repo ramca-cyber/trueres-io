@@ -75,7 +75,7 @@ const TagEditor = () => {
         )}
 
         <p className="text-xs text-muted-foreground">
-          Tag editing is read-only in the current version. Full editing support is coming soon.
+          Tags are displayed in read-only mode. Metadata editing is not yet supported.
         </p>
       </div>
     </ToolPage>

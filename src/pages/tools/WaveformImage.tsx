@@ -8,6 +8,7 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
+import { useAudioStore } from '@/stores/audio-store';
 import { type WaveformData } from '@/types/analysis';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,7 @@ const WaveformImage = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress } = useAudioFile();
   const { runAnalysis, getResult } = useAnalysis();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [imgWidth, setImgWidth] = useState(1200);
   const [imgHeight, setImgHeight] = useState(300);
   const [peakColor, setPeakColor] = useState('#F59E0B');
@@ -29,6 +31,14 @@ const WaveformImage = () => {
   useEffect(() => {
     if (pcm) runAnalysis('waveform');
   }, [pcm, runAnalysis]);
+
+  // Responsive: default width to container width
+  useEffect(() => {
+    if (containerRef.current) {
+      const w = containerRef.current.clientWidth;
+      if (w > 200) setImgWidth(w);
+    }
+  }, [fileName]);
 
   const renderImage = useCallback(() => {
     const canvas = canvasRef.current;
@@ -72,7 +82,7 @@ const WaveformImage = () => {
 
   return (
     <ToolPage tool={tool}>
-      <div className="space-y-4">
+      <div className="space-y-4" ref={containerRef}>
         <FileInfoBar fileName={fileName} fileSize={fileSize} format={headerInfo?.format} duration={headerInfo?.duration} />
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
 
@@ -109,6 +119,10 @@ const WaveformImage = () => {
             label="Download PNG"
           />
         )}
+
+        <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          Choose different file
+        </button>
       </div>
     </ToolPage>
   );

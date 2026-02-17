@@ -27,8 +27,14 @@ export function useFFmpeg() {
     async (
       inputFile: File,
       outputName: string,
-      args: string[]
+      args: string[],
     ): Promise<Blob | null> => {
+      // Prevent concurrent processing
+      if (store.processing) {
+        store.setProcessError('Another processing task is already running');
+        return null;
+      }
+
       // Auto-load if needed
       if (!isFFmpegLoaded()) {
         store.setLoading(true);
@@ -46,8 +52,7 @@ export function useFFmpeg() {
       store.clearOutput();
 
       try {
-        const inputName = `input_${inputFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-        const blob = await processFile(inputFile, inputName, outputName, args, (p) => {
+        const blob = await processFile(inputFile, args[1] || `input_${inputFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`, outputName, args, (p) => {
           store.setProgress(p);
         });
         store.setOutput(blob, outputName);

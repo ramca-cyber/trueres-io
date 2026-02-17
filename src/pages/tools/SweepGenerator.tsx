@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -23,9 +23,17 @@ const SweepGenerator = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
+  // Cleanup AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      try { sourceRef.current?.stop(); } catch {}
+      audioCtxRef.current?.close();
+    };
+  }, []);
+
   const play = useCallback(() => {
     if (playing) {
-      sourceRef.current?.stop();
+      try { sourceRef.current?.stop(); } catch {}
       setPlaying(false);
       return;
     }

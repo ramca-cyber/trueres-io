@@ -1,9 +1,11 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Shield } from 'lucide-react';
 import { type ToolDefinition } from '@/types/tools';
 import { CrossToolLinks } from './CrossToolLinks';
 import { getToolFAQ } from '@/config/tool-faqs';
+import { useAudioStore } from '@/stores/audio-store';
+import { useFFmpegStore } from '@/stores/ffmpeg-store';
 
 interface ToolPageProps {
   tool: ToolDefinition;
@@ -13,6 +15,14 @@ interface ToolPageProps {
 
 export function ToolPage({ tool, children, faq: faqProp }: ToolPageProps) {
   const faq = faqProp || getToolFAQ(tool.id);
+  const clearAudio = useAudioStore((s) => s.clear);
+  const resetFFmpeg = useFFmpegStore((s) => s.reset);
+
+  // Clear shared stores when switching between tools
+  useEffect(() => {
+    clearAudio();
+    resetFFmpeg();
+  }, [tool.id, clearAudio, resetFFmpeg]);
 
   // JSON-LD: WebApplication
   const webAppSchema = {
