@@ -8,7 +8,7 @@ export function BrowserCompatBanner() {
 
   useEffect(() => {
     const caps = detectCapabilities();
-    const w = getCompatWarnings(caps);
+    const w = getCompatWarnings(caps).filter((w) => w.severity !== 'info');
     setWarnings(w);
   }, []);
 
