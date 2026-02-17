@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -6,6 +6,7 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
 import { WaveformCanvas } from '@/components/visualizations/WaveformCanvas';
+import { VizToolbar } from '@/components/shared/VizToolbar';
 import { Button } from '@/components/ui/button';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
@@ -13,12 +14,10 @@ import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 import { type WaveformData } from '@/types/analysis';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 const tool = getToolById('waveform-viewer')!;
-
-const ZOOM_LEVELS = [1, 2, 4, 8, 16];
 
 const WaveformViewer = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, file } = useAudioFile();
@@ -28,7 +27,6 @@ const WaveformViewer = () => {
     if (pending) loadFile(pending);
   }, []);
   const { runAnalysis, getResult } = useAnalysis();
-  const [zoomIdx, setZoomIdx] = useState(0);
 
   const waveformData = getResult<WaveformData & { type: string; timestamp: number; duration: number }>('waveform');
 
@@ -36,21 +34,25 @@ const WaveformViewer = () => {
     if (pcm) runAnalysis('waveform');
   }, [pcm, runAnalysis]);
 
+  const viz = useVizViewport({ lockY: true, maxZoomX: 64 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Compute peak from waveform data
   const peakLevel = waveformData
     ? Math.max(...Array.from(waveformData.peaks))
     : null;
   const peakDb = peakLevel && peakLevel > 0 ? 20 * Math.log10(peakLevel) : null;
 
-  // Zoom: slice waveform data
-  const zoom = ZOOM_LEVELS[zoomIdx];
-  const zoomedData = waveformData && zoom > 1
-    ? {
-        peaks: waveformData.peaks.slice(0, Math.ceil(waveformData.peaks.length / zoom)),
-        rms: waveformData.rms.slice(0, Math.ceil(waveformData.rms.length / zoom)),
-        samplesPerPixel: waveformData.samplesPerPixel,
-      }
-    : waveformData;
+  // Cursor readout
+  const cursorReadout = useMemo(() => {
+    if (!viz.cursor || !waveformData || !headerInfo?.duration) return undefined;
+    const time = viz.cursor.dataX * headerInfo.duration;
+    // Find amplitude at cursor position
+    const bucketIdx = Math.floor(viz.cursor.dataX * waveformData.peaks.length);
+    const amp = waveformData.peaks[Math.min(bucketIdx, waveformData.peaks.length - 1)] || 0;
+    const db = amp > 0 ? (20 * Math.log10(amp)).toFixed(1) : '-∞';
+    return `${time.toFixed(2)}s / ${db} dBFS`;
+  }, [viz.cursor, waveformData, headerInfo?.duration]);
 
   if (!fileName) {
     return (
@@ -97,32 +99,25 @@ const WaveformViewer = () => {
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!waveformData && pcm && <ProgressBar value={50} label="Computing waveform..." />}
 
-        {zoomedData && (
-          <>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setZoomIdx(Math.min(zoomIdx + 1, ZOOM_LEVELS.length - 1))}
-                disabled={zoomIdx >= ZOOM_LEVELS.length - 1}
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline" size="sm"
-                onClick={() => setZoomIdx(Math.max(zoomIdx - 1, 0))}
-                disabled={zoomIdx <= 0}
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              {zoomIdx > 0 && (
-                <Button variant="ghost" size="sm" onClick={() => setZoomIdx(0)}>
-                  <RotateCcw className="h-4 w-4 mr-1" /> Reset
-                </Button>
-              )}
-              <span className="text-xs text-muted-foreground font-mono">{zoom}×</span>
-            </div>
-            <WaveformCanvas data={zoomedData as WaveformData} />
-          </>
+        {waveformData && (
+          <div ref={containerRef} className="space-y-2">
+            <VizToolbar
+              zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
+              cursorReadout={cursorReadout}
+              fullscreen={{ containerRef }}
+              download={{ canvasRef: viz.canvasRef, filename: `${fileName}-waveform.png` }}
+            />
+            <WaveformCanvas
+              data={waveformData as WaveformData}
+              viewport={viz.viewport}
+              cursor={viz.cursor}
+              canvasHandlers={viz.handlers}
+              canvasRef={viz.canvasRef}
+            />
+            {viz.isZoomed && (
+              <p className="text-xs text-muted-foreground">Scroll to zoom · Drag to pan · Double-click to reset</p>
+            )}
+          </div>
         )}
 
         <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>

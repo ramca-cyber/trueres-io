@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -8,12 +8,14 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
 import { ComplianceBadge } from '@/components/display/ComplianceBadge';
 import { LoudnessHistoryCanvas } from '@/components/visualizations/LoudnessHistoryCanvas';
+import { VizToolbar } from '@/components/shared/VizToolbar';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 import { type LUFSResult } from '@/types/analysis';
 
 const tool = getToolById('lufs-meter')!;
@@ -39,6 +41,18 @@ const LufsMeter = () => {
   const momentaryMax = lufs?.momentary?.length
     ? Math.max(...lufs.momentary.filter(isFinite))
     : null;
+
+  const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Cursor readout
+  const cursorReadout = useMemo(() => {
+    if (!viz.cursor || !lufs) return undefined;
+    const totalSeconds = lufs.shortTerm.length * 3;
+    const time = viz.cursor.dataX * totalSeconds;
+    const lufsVal = -60 + (1 - viz.cursor.dataY) * 60;
+    return `${time.toFixed(1)}s / ${lufsVal.toFixed(1)} LUFS`;
+  }, [viz.cursor, lufs]);
 
   return (
     <ToolPage tool={tool}>
@@ -91,10 +105,25 @@ const LufsMeter = () => {
               </div>
 
               {lufs.shortTerm.length > 1 && (
-                <LoudnessHistoryCanvas
-                  shortTerm={lufs.shortTerm}
-                  momentary={lufs.momentary}
-                />
+                <div ref={containerRef} className="space-y-2">
+                  <VizToolbar
+                    zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
+                    cursorReadout={cursorReadout}
+                    fullscreen={{ containerRef }}
+                    download={{ canvasRef: viz.canvasRef, filename: `${fileName}-loudness.png` }}
+                  />
+                  <LoudnessHistoryCanvas
+                    shortTerm={lufs.shortTerm}
+                    momentary={lufs.momentary}
+                    viewport={viz.viewport}
+                    cursor={viz.cursor}
+                    canvasHandlers={viz.handlers}
+                    canvasRef={viz.canvasRef}
+                  />
+                  {viz.isZoomed && (
+                    <p className="text-xs text-muted-foreground">Scroll to zoom time · Shift+scroll to zoom LUFS · Drag to pan · Double-click to reset</p>
+                  )}
+                </div>
               )}
 
               <div>

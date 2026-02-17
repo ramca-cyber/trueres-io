@@ -1,15 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { SpectrumCanvas } from '@/components/visualizations/SpectrumCanvas';
+import { VizToolbar } from '@/components/shared/VizToolbar';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFrequency } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 import { type SpectrumData } from '@/types/analysis';
 import { Button } from '@/components/ui/button';
 
@@ -30,6 +32,20 @@ const FreqResponse = () => {
     if (pcm) runAnalysis('spectrum');
   }, [pcm, runAnalysis]);
 
+  const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const cursorReadout = useMemo(() => {
+    if (!viz.cursor || !spectrumData) return undefined;
+    const maxFreq = spectrumData.frequencies[spectrumData.frequencies.length - 1] || 22050;
+    const minFreq = Math.max(20, spectrumData.frequencies[1] || 20);
+    const logMin = Math.log10(minFreq);
+    const logMax = Math.log10(maxFreq);
+    const freq = Math.pow(10, logMin + viz.cursor.dataX * (logMax - logMin));
+    const dbVal = -100 + (1 - viz.cursor.dataY) * 100;
+    return `${formatFrequency(freq)} / ${dbVal.toFixed(0)} dB`;
+  }, [viz.cursor, spectrumData]);
+
   if (!fileName) {
     return (
       <ToolPage tool={tool}>
@@ -49,12 +65,29 @@ const FreqResponse = () => {
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!spectrumData && pcm && <ProgressBar value={50} label="Computing frequency response..." />}
         {spectrumData && (
-          <div className="space-y-2">
+          <div ref={containerRef} className="space-y-2">
             <h3 className="text-sm font-medium">Frequency Response Curve</h3>
             <p className="text-xs text-muted-foreground">
               For best results, use a logarithmic sweep recording captured through your audio chain.
             </p>
-            <SpectrumCanvas data={spectrumData as unknown as SpectrumData} showOctaveBands={false} height={350} />
+            <VizToolbar
+              zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
+              cursorReadout={cursorReadout}
+              fullscreen={{ containerRef }}
+              download={{ canvasRef: viz.canvasRef, filename: `${fileName}-freq-response.png` }}
+            />
+            <SpectrumCanvas
+              data={spectrumData as unknown as SpectrumData}
+              showOctaveBands={false}
+              height={350}
+              viewport={viz.viewport}
+              cursor={viz.cursor}
+              canvasHandlers={viz.handlers}
+              canvasRef={viz.canvasRef}
+            />
+            {viz.isZoomed && (
+              <p className="text-xs text-muted-foreground">Scroll to zoom freq · Shift+scroll to zoom dB · Drag to pan · Double-click to reset</p>
+            )}
           </div>
         )}
         <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>

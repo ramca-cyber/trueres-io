@@ -1,8 +1,10 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { MetricCard } from '@/components/display/MetricCard';
+import { VizToolbar } from '@/components/shared/VizToolbar';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 
 const tool = getToolById('ir-viewer')!;
 
@@ -10,8 +12,11 @@ const IRViewer = () => {
   const [fileName, setFileName] = useState('');
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [rt60, setRt60] = useState<number | null>(null);
-  const waveCanvasRef = useRef<HTMLCanvasElement>(null);
-  const freqCanvasRef = useRef<HTMLCanvasElement>(null);
+
+  const waveViz = useVizViewport({ lockY: true, maxZoomX: 64 });
+  const freqViz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
+  const waveContainerRef = useRef<HTMLDivElement>(null);
+  const freqContainerRef = useRef<HTMLDivElement>(null);
 
   const handleFile = useCallback(async (file: File) => {
     setFileName(file.name);
@@ -22,7 +27,7 @@ const IRViewer = () => {
 
     // Estimate RT60 from energy decay
     const data = decoded.getChannelData(0);
-    const blockSize = Math.floor(decoded.sampleRate / 100); // 10ms blocks
+    const blockSize = Math.floor(decoded.sampleRate / 100);
     const blocks = Math.floor(data.length / blockSize);
     const energyDb: number[] = [];
     for (let b = 0; b < blocks; b++) {
@@ -33,7 +38,6 @@ const IRViewer = () => {
       energyDb.push(10 * Math.log10(energy / blockSize + 1e-15));
     }
 
-    // Find peak and measure time to -60dB
     const peakIdx = energyDb.indexOf(Math.max(...energyDb));
     const peakDb = energyDb[peakIdx];
     const target = peakDb - 60;
@@ -44,7 +48,6 @@ const IRViewer = () => {
         break;
       }
     }
-    // If didn't reach -60, extrapolate from -20 (T20)
     if (rt60Estimate === null) {
       const t20Target = peakDb - 20;
       for (let i = peakIdx; i < energyDb.length; i++) {
@@ -58,42 +61,64 @@ const IRViewer = () => {
     ctx.close();
   }, []);
 
-  // Draw waveform
+  // Draw waveform with viewport support
   useEffect(() => {
-    if (!buffer || !waveCanvasRef.current) return;
-    const canvas = waveCanvasRef.current;
+    const canvas = waveViz.canvasRef.current;
+    if (!buffer || !canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.fillStyle = '#1a1a2e';
+    const w = 800;
+    const h = 200;
+    canvas.width = w;
+    canvas.height = h;
+
+    ctx.fillStyle = 'hsl(0, 0%, 7%)';
     ctx.fillRect(0, 0, w, h);
 
     const data = buffer.getChannelData(0);
-    const step = Math.max(1, Math.floor(data.length / w));
+    const vp = waveViz.viewport;
+    const startSample = Math.floor(vp.xMin * data.length);
+    const endSample = Math.ceil(vp.xMax * data.length);
+    const visibleLength = endSample - startSample;
+    const step = Math.max(1, Math.floor(visibleLength / w));
 
     ctx.beginPath();
     ctx.strokeStyle = 'hsl(200, 80%, 60%)';
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x++) {
-      const idx = x * step;
+      const idx = startSample + Math.floor((x / w) * visibleLength);
       const y = (1 - data[idx]) * h / 2;
       if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
-  }, [buffer]);
 
-  // Draw frequency response
+    // Crosshair
+    if (waveViz.cursor) {
+      const cx = waveViz.cursor.normX * w;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, h);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }, [buffer, waveViz.viewport, waveViz.cursor]);
+
+  // Draw frequency response with viewport support
   useEffect(() => {
-    if (!buffer || !freqCanvasRef.current) return;
-    const canvas = freqCanvasRef.current;
+    const canvas = freqViz.canvasRef.current;
+    if (!buffer || !canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const w = canvas.width;
-    const h = canvas.height;
-    ctx.fillStyle = '#1a1a2e';
+    const w = 800;
+    const h = 250;
+    canvas.width = w;
+    canvas.height = h;
+
+    ctx.fillStyle = 'hsl(0, 0%, 7%)';
     ctx.fillRect(0, 0, w, h);
 
-    // FFT via OfflineAudioContext
     const offCtx = new OfflineAudioContext(1, buffer.length, buffer.sampleRate);
     const source = offCtx.createBufferSource();
     const analyser = offCtx.createAnalyser();
@@ -105,6 +130,18 @@ const IRViewer = () => {
       const freqData = new Float32Array(analyser.frequencyBinCount);
       analyser.getFloatFrequencyData(freqData);
 
+      const vp = freqViz.viewport;
+      const logMin = Math.log10(20);
+      const logMax = Math.log10(20000);
+      const logRange = logMax - logMin;
+      const viewLogMin = logMin + vp.xMin * logRange;
+      const viewLogMax = logMin + vp.xMax * logRange;
+      const viewLogRange = viewLogMax - viewLogMin;
+
+      const dbMin = -100 + vp.yMin * 100;
+      const dbMax = -100 + vp.yMax * 100;
+      const dbRange = dbMax - dbMin;
+
       ctx.beginPath();
       ctx.strokeStyle = 'hsl(150, 70%, 55%)';
       ctx.lineWidth = 1.5;
@@ -112,9 +149,9 @@ const IRViewer = () => {
       const sr = buffer.sampleRate;
       for (let i = 1; i < freqData.length; i++) {
         const freq = (i * sr) / analyser.fftSize;
-        if (freq < 20 || freq > 20000) continue;
-        const x = (Math.log10(freq / 20) / Math.log10(20000 / 20)) * w;
-        const y = h - ((freqData[i] + 100) / 100) * h;
+        if (freq < Math.pow(10, viewLogMin) || freq > Math.pow(10, viewLogMax)) continue;
+        const x = (Math.log10(freq) - viewLogMin) / viewLogRange * w;
+        const y = h - ((freqData[i] - dbMin) / dbRange) * h;
         if (i === 1) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
@@ -124,11 +161,46 @@ const IRViewer = () => {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '10px sans-serif';
       [100, 1000, 10000].forEach(freq => {
-        const x = (Math.log10(freq / 20) / Math.log10(20000 / 20)) * w;
+        if (freq < Math.pow(10, viewLogMin) || freq > Math.pow(10, viewLogMax)) return;
+        const x = (Math.log10(freq) - viewLogMin) / viewLogRange * w;
         ctx.fillText(freq >= 1000 ? `${freq / 1000}k` : `${freq}`, x + 2, h - 4);
       });
+
+      // Crosshair
+      if (freqViz.cursor) {
+        const cx = freqViz.cursor.normX * w;
+        const cy = freqViz.cursor.normY * h;
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, h);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(w, cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     });
-  }, [buffer]);
+  }, [buffer, freqViz.viewport, freqViz.cursor]);
+
+  // Cursor readouts
+  const waveCursorReadout = useMemo(() => {
+    if (!waveViz.cursor || !buffer) return undefined;
+    const time = waveViz.cursor.dataX * buffer.duration;
+    return `${(time * 1000).toFixed(1)} ms`;
+  }, [waveViz.cursor, buffer]);
+
+  const freqCursorReadout = useMemo(() => {
+    if (!freqViz.cursor) return undefined;
+    const logMin = Math.log10(20);
+    const logMax = Math.log10(20000);
+    const freq = Math.pow(10, logMin + freqViz.cursor.dataX * (logMax - logMin));
+    const db = -100 + (1 - freqViz.cursor.dataY) * 100;
+    return `${freq >= 1000 ? `${(freq / 1000).toFixed(1)}k` : Math.round(freq)} Hz / ${db.toFixed(0)} dB`;
+  }, [freqViz.cursor]);
 
   return (
     <ToolPage tool={tool}>
@@ -152,14 +224,40 @@ const IRViewer = () => {
               />
             </div>
 
-            <div className="space-y-2">
+            <div ref={waveContainerRef} className="space-y-2">
               <h3 className="text-sm font-heading font-semibold">Waveform</h3>
-              <canvas ref={waveCanvasRef} width={800} height={200} className="w-full rounded-md border border-border" />
+              <VizToolbar
+                zoom={{ onIn: waveViz.zoomIn, onOut: waveViz.zoomOut, onReset: waveViz.reset, isZoomed: waveViz.isZoomed }}
+                cursorReadout={waveCursorReadout}
+                fullscreen={{ containerRef: waveContainerRef }}
+                download={{ canvasRef: waveViz.canvasRef, filename: `${fileName}-ir-waveform.png` }}
+              />
+              <canvas
+                ref={waveViz.canvasRef}
+                width={800}
+                height={200}
+                className="w-full rounded-md border border-border"
+                style={{ cursor: 'crosshair' }}
+                {...waveViz.handlers}
+              />
             </div>
 
-            <div className="space-y-2">
+            <div ref={freqContainerRef} className="space-y-2">
               <h3 className="text-sm font-heading font-semibold">Frequency Response</h3>
-              <canvas ref={freqCanvasRef} width={800} height={250} className="w-full rounded-md border border-border" />
+              <VizToolbar
+                zoom={{ onIn: freqViz.zoomIn, onOut: freqViz.zoomOut, onReset: freqViz.reset, isZoomed: freqViz.isZoomed }}
+                cursorReadout={freqCursorReadout}
+                fullscreen={{ containerRef: freqContainerRef }}
+                download={{ canvasRef: freqViz.canvasRef, filename: `${fileName}-ir-freq.png` }}
+              />
+              <canvas
+                ref={freqViz.canvasRef}
+                width={800}
+                height={250}
+                className="w-full rounded-md border border-border"
+                style={{ cursor: 'crosshair' }}
+                {...freqViz.handlers}
+              />
             </div>
 
             <p className="text-xs text-muted-foreground">File: {fileName}</p>

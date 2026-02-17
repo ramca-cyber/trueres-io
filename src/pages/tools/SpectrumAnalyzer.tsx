@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -7,12 +7,14 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
 import { SpectrumCanvas } from '@/components/visualizations/SpectrumCanvas';
+import { VizToolbar } from '@/components/shared/VizToolbar';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFrequency } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 import { type SpectrumData } from '@/types/analysis';
 
 const tool = getToolById('spectrum-analyzer')!;
@@ -32,6 +34,9 @@ const SpectrumAnalyzer = () => {
     if (pcm) runAnalysis('spectrum');
   }, [pcm, runAnalysis]);
 
+  const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
   // Find peak frequency
   let peakFreq: number | null = null;
   let peakMag: number | null = null;
@@ -45,6 +50,19 @@ const SpectrumAnalyzer = () => {
       }
     }
   }
+
+  // Cursor readout
+  const cursorReadout = useMemo(() => {
+    if (!viz.cursor || !spectrumData) return undefined;
+    const maxFreq = spectrumData.frequencies[spectrumData.frequencies.length - 1] || 22050;
+    const minFreq = Math.max(20, spectrumData.frequencies[1] || 20);
+    const logMin = Math.log10(minFreq);
+    const logMax = Math.log10(maxFreq);
+    const freq = Math.pow(10, logMin + viz.cursor.dataX * (logMax - logMin));
+    const db = -100 + viz.cursor.dataY * 100; // map Y back to dB (inverted: top=0, bottom=-100)
+    const dbVal = -100 + (1 - viz.cursor.dataY) * 100;
+    return `${formatFrequency(freq)} / ${dbVal.toFixed(0)} dB`;
+  }, [viz.cursor, spectrumData]);
 
   if (!fileName) {
     return (
@@ -89,7 +107,24 @@ const SpectrumAnalyzer = () => {
                 status="neutral"
               />
             </div>
-            <SpectrumCanvas data={spectrumData as unknown as SpectrumData} />
+            <div ref={containerRef} className="space-y-2">
+              <VizToolbar
+                zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
+                cursorReadout={cursorReadout}
+                fullscreen={{ containerRef }}
+                download={{ canvasRef: viz.canvasRef, filename: `${fileName}-spectrum.png` }}
+              />
+              <SpectrumCanvas
+                data={spectrumData as unknown as SpectrumData}
+                viewport={viz.viewport}
+                cursor={viz.cursor}
+                canvasHandlers={viz.handlers}
+                canvasRef={viz.canvasRef}
+              />
+              {viz.isZoomed && (
+                <p className="text-xs text-muted-foreground">Scroll to zoom freq · Shift+scroll to zoom dB · Drag to pan · Double-click to reset</p>
+              )}
+            </div>
           </>
         )}
         <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>

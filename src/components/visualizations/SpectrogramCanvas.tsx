@@ -1,5 +1,6 @@
 import { useRef, useEffect, useMemo } from 'react';
 import { type SpectrogramData } from '@/types/analysis';
+import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface SpectrogramCanvasProps {
   data: SpectrogramData;
@@ -8,10 +9,12 @@ interface SpectrogramCanvasProps {
   colormap?: 'magma' | 'inferno' | 'viridis' | 'plasma' | 'grayscale';
   minDb?: number;
   maxDb?: number;
-  /** Optional frequency ceiling line to draw (Hz) */
   ceilingHz?: number;
-  /** Whether to show a CD Nyquist reference line at 22.05 kHz */
   showCdNyquist?: boolean;
+  viewport?: Viewport;
+  cursor?: CursorData | null;
+  canvasHandlers?: Record<string, any>;
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
 /**
@@ -114,12 +117,17 @@ export function SpectrogramCanvas({
   maxDb = 0,
   ceilingHz,
   showCdNyquist = false,
+  viewport,
+  cursor,
+  canvasHandlers,
+  canvasRef: externalRef,
 }: SpectrogramCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const internalRef = useRef<HTMLCanvasElement>(null);
+  const ref = externalRef || internalRef;
   const lut = useMemo(() => LUTS[colormap] || LUTS.magma, [colormap]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
     if (!canvas || !data.magnitudes.length) return;
 
     const ctx = canvas.getContext('2d');
@@ -133,16 +141,28 @@ export function SpectrogramCanvas({
     const dbRange = maxDb - minDb;
     const nyquist = data.sampleRate / 2;
 
-    // Render at display resolution: map each display pixel to the nearest data point
+    // Viewport slicing
+    const xMin = viewport?.xMin ?? 0;
+    const xMax = viewport?.xMax ?? 1;
+    const yMin = viewport?.yMin ?? 0;
+    const yMax = viewport?.yMax ?? 1;
+
+    const startFrame = Math.floor(xMin * numFrames);
+    const endFrame = Math.ceil(xMax * numFrames);
+    // Y: yMin=0 means bottom (low freq), yMax=1 means top (high freq)
+    const startBin = Math.floor(yMin * numBins);
+    const endBin = Math.ceil(yMax * numBins);
+
     const imgData = ctx.createImageData(width, height);
     const pixels = imgData.data;
 
     for (let dx = 0; dx < width; dx++) {
-      const frameIdx = Math.min(numFrames - 1, (dx / width * numFrames) | 0);
+      const frameIdx = Math.min(endFrame - 1, startFrame + ((dx / width * (endFrame - startFrame)) | 0));
       const frame = data.magnitudes[frameIdx];
       for (let dy = 0; dy < height; dy++) {
         // dy=0 is top (high freq), dy=height-1 is bottom (low freq)
-        const binIdx = Math.min(numBins - 1, ((1 - dy / height) * numBins) | 0);
+        const binFrac = 1 - dy / height; // 0 at bottom, 1 at top
+        const binIdx = Math.min(endBin - 1, startBin + ((binFrac * (endBin - startBin)) | 0));
         const db = frame[binIdx];
         const t = Math.max(0, Math.min(1, (db - minDb) / dbRange));
         const lutIdx = (t * 255) | 0;
@@ -157,39 +177,50 @@ export function SpectrogramCanvas({
 
     ctx.putImageData(imgData, 0, 0);
 
-    // Draw overlay lines
+    // Overlay lines - adjust for viewport
     ctx.font = '10px monospace';
+
+    // Helper: freq to Y position considering viewport
+    const freqToY = (freq: number) => {
+      const binFrac = freq / nyquist; // 0..1
+      const viewFrac = (binFrac - yMin) / (yMax - yMin); // normalized in viewport
+      return (1 - viewFrac) * height;
+    };
 
     // Bandwidth ceiling line
     if (ceilingHz && ceilingHz < nyquist) {
-      const yPos = (1 - ceilingHz / nyquist) * height;
-      ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 3]);
-      ctx.beginPath();
-      ctx.moveTo(0, yPos);
-      ctx.lineTo(width, yPos);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(255, 80, 80, 0.9)';
-      ctx.textAlign = 'left';
-      ctx.fillText(`Ceiling: ${ceilingHz >= 1000 ? `${(ceilingHz / 1000).toFixed(1)}k` : Math.round(ceilingHz)} Hz`, 4, yPos - 4);
+      const yPos = freqToY(ceilingHz);
+      if (yPos >= 0 && yPos <= height) {
+        ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 3]);
+        ctx.beginPath();
+        ctx.moveTo(0, yPos);
+        ctx.lineTo(width, yPos);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+        ctx.textAlign = 'left';
+        ctx.fillText(`Ceiling: ${ceilingHz >= 1000 ? `${(ceilingHz / 1000).toFixed(1)}k` : Math.round(ceilingHz)} Hz`, 4, yPos - 4);
+      }
     }
 
     // CD Nyquist reference line (22.05 kHz)
     if (showCdNyquist && nyquist > 22050) {
-      const cdY = (1 - 22050 / nyquist) * height;
-      ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(0, cdY);
-      ctx.lineTo(width, cdY);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
-      ctx.textAlign = 'left';
-      ctx.fillText('CD Nyquist (22.05k)', 4, cdY - 4);
+      const cdY = freqToY(22050);
+      if (cdY >= 0 && cdY <= height) {
+        ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(0, cdY);
+        ctx.lineTo(width, cdY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
+        ctx.textAlign = 'left';
+        ctx.fillText('CD Nyquist (22.05k)', 4, cdY - 4);
+      }
     }
 
     // Frequency axis labels
@@ -198,8 +229,8 @@ export function SpectrogramCanvas({
     const freqLabels = [100, 500, 1000, 2000, 5000, 10000, 20000];
     for (const freq of freqLabels) {
       if (freq > nyquist) continue;
-      const yRatio = 1 - freq / nyquist;
-      const yPos = yRatio * height;
+      const yPos = freqToY(freq);
+      if (yPos < 0 || yPos > height) continue;
       ctx.fillText(`${freq >= 1000 ? `${freq / 1000}k` : freq}`, width - 4, yPos + 3);
       ctx.strokeStyle = 'rgba(255,255,255,0.1)';
       ctx.lineWidth = 1;
@@ -213,19 +244,40 @@ export function SpectrogramCanvas({
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     const totalDuration = data.times[data.times.length - 1] || 0;
+    const viewStartTime = xMin * totalDuration;
+    const viewEndTime = xMax * totalDuration;
     const timeLabels = 5;
     for (let i = 0; i <= timeLabels; i++) {
-      const t = (i / timeLabels) * totalDuration;
+      const t = viewStartTime + (i / timeLabels) * (viewEndTime - viewStartTime);
       const x = (i / timeLabels) * width;
       ctx.fillText(`${t.toFixed(1)}s`, x, height - 4);
     }
-  }, [data, width, height, lut, minDb, maxDb, ceilingHz, showCdNyquist]);
+
+    // Crosshair cursor
+    if (cursor) {
+      const cx = cursor.normX * width;
+      const cy = cursor.normY * height;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, height);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, cy);
+      ctx.lineTo(width, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }, [data, width, height, lut, minDb, maxDb, ceilingHz, showCdNyquist, viewport, cursor, ref]);
 
   return (
     <canvas
-      ref={canvasRef}
+      ref={ref as React.RefObject<HTMLCanvasElement>}
       className="w-full rounded-md border border-border"
-      style={{ imageRendering: 'auto' }}
+      style={{ imageRendering: 'auto', cursor: 'crosshair' }}
+      {...canvasHandlers}
     />
   );
 }

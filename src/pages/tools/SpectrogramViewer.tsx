@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -6,17 +6,15 @@ import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { SpectrogramCanvas } from '@/components/visualizations/SpectrogramCanvas';
-import { Slider } from '@/components/ui/slider';
+import { VizToolbar } from '@/components/shared/VizToolbar';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT, COLORMAPS, type Colormap } from '@/config/constants';
+import { AUDIO_ACCEPT, COLORMAPS, type Colormap, formatFrequency } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { useVizViewport } from '@/hooks/use-viz-viewport';
 import { type SpectrogramData, type BandwidthResult } from '@/types/analysis';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 const tool = getToolById('spectrogram')!;
 
@@ -44,6 +42,33 @@ const SpectrogramViewer = () => {
     }
   }, [pcm, runAnalysis]);
 
+  const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 16 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const isHiRes = headerInfo && headerInfo.sampleRate > 48000;
+
+  // Cursor readout
+  const cursorReadout = useMemo(() => {
+    if (!viz.cursor || !spectrogramData) return undefined;
+    const totalDuration = spectrogramData.times[spectrogramData.times.length - 1] || 0;
+    const nyquist = spectrogramData.sampleRate / 2;
+    const time = viz.cursor.dataX * totalDuration;
+    const freq = viz.cursor.dataY * nyquist;
+    return `${time.toFixed(2)}s / ${formatFrequency(freq)}`;
+  }, [viz.cursor, spectrogramData]);
+
+  // Build toggles array
+  const toggles = useMemo(() => {
+    const t = [];
+    if (bandwidthData) {
+      t.push({ id: 'show-ceiling', label: 'Bandwidth ceiling', checked: showCeiling, onChange: setShowCeiling });
+    }
+    if (isHiRes) {
+      t.push({ id: 'show-cd', label: 'CD Nyquist', checked: showCdNyquist, onChange: setShowCdNyquist });
+    }
+    return t;
+  }, [bandwidthData, isHiRes, showCeiling, showCdNyquist]);
+
   if (!fileName) {
     return (
       <ToolPage tool={tool}>
@@ -51,8 +76,6 @@ const SpectrogramViewer = () => {
       </ToolPage>
     );
   }
-
-  const isHiRes = headerInfo && headerInfo.sampleRate > 48000;
 
   return (
     <ToolPage tool={tool}>
@@ -75,61 +98,16 @@ const SpectrogramViewer = () => {
         )}
 
         {spectrogramData && (
-          <>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Colormap</label>
-                <Select value={colormap} onValueChange={(v) => setColormap(v as Colormap)}>
-                  <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {COLORMAPS.map((c) => (
-                      <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium whitespace-nowrap">Min dB</label>
-                <Slider
-                  value={[minDb]}
-                  onValueChange={([v]) => setMinDb(v)}
-                  min={-160}
-                  max={-20}
-                  step={5}
-                  className="w-28"
-                />
-                <span className="text-xs font-mono text-muted-foreground w-10">{minDb}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium whitespace-nowrap">Max dB</label>
-                <Slider
-                  value={[maxDb]}
-                  onValueChange={([v]) => setMaxDb(v)}
-                  min={-40}
-                  max={0}
-                  step={5}
-                  className="w-28"
-                />
-                <span className="text-xs font-mono text-muted-foreground w-10">{maxDb}</span>
-              </div>
-
-              {bandwidthData && (
-                <div className="flex items-center gap-2">
-                  <Switch checked={showCeiling} onCheckedChange={setShowCeiling} id="show-ceiling" />
-                  <Label htmlFor="show-ceiling" className="text-sm">Bandwidth ceiling</Label>
-                </div>
-              )}
-
-              {isHiRes && (
-                <div className="flex items-center gap-2">
-                  <Switch checked={showCdNyquist} onCheckedChange={setShowCdNyquist} id="show-cd" />
-                  <Label htmlFor="show-cd" className="text-sm">CD Nyquist</Label>
-                </div>
-              )}
-            </div>
-
+          <div ref={containerRef} className="space-y-2">
+            <VizToolbar
+              zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
+              cursorReadout={cursorReadout}
+              dbRange={{ min: minDb, max: maxDb, onMinChange: setMinDb, onMaxChange: setMaxDb }}
+              colormap={{ value: colormap, onChange: (v) => setColormap(v as Colormap), options: COLORMAPS }}
+              toggles={toggles}
+              fullscreen={{ containerRef }}
+              download={{ canvasRef: viz.canvasRef, filename: `${fileName}-spectrogram.png` }}
+            />
             <SpectrogramCanvas
               data={spectrogramData as unknown as SpectrogramData}
               colormap={colormap}
@@ -137,6 +115,10 @@ const SpectrogramViewer = () => {
               maxDb={maxDb}
               ceilingHz={showCeiling ? bandwidthData?.frequencyCeiling : undefined}
               showCdNyquist={showCdNyquist && !!isHiRes}
+              viewport={viz.viewport}
+              cursor={viz.cursor}
+              canvasHandlers={viz.handlers}
+              canvasRef={viz.canvasRef}
             />
 
             {bandwidthData && (
@@ -146,7 +128,10 @@ const SpectrogramViewer = () => {
                 {bandwidthData.sourceGuess}
               </p>
             )}
-          </>
+            {viz.isZoomed && (
+              <p className="text-xs text-muted-foreground">Scroll to zoom time · Shift+scroll to zoom freq · Drag to pan · Double-click to reset</p>
+            )}
+          </div>
         )}
 
         <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
