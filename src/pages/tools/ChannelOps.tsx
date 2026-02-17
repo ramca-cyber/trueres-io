@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { BatchQueue } from '@/components/shared/BatchQueue';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { useBatchProcess } from '@/hooks/use-batch-process';
 import { useAudioPreview, type ChannelMode } from '@/hooks/use-audio-preview';
 import { channelArgs, type ChannelOp } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -26,16 +28,34 @@ const OPS: { value: ChannelOp; label: string; desc: string; previewMode: Channel
 
 const ChannelOps = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [op, setOp] = useState<ChannelOp>('mono');
+  const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const pending = useFileTransferStore.getState().consumePendingFile();
     if (pending) setFile(pending);
   }, []);
-  const [op, setOp] = useState<ChannelOp>('mono');
+
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playChannel, stop } = useAudioPreview(file);
+  const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  const handleMultipleFiles = (files: File[]) => {
+    if (files.length === 1) { handleFileSelect(files[0]); return; }
+    setFile(null);
+    batch.clearQueue();
+    batch.addFiles(files);
+  };
+
+  const buildJob = useCallback((f: File) => {
+    const ext = f.name.split('.').pop() || 'wav';
+    const baseName = f.name.replace(/\.[^.]+$/, '');
+    const outName = `${baseName}_${op}.${ext}`;
+    const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const args = channelArgs(inputName, outName, op);
+    return { inputName, outputName: outName, args };
+  }, [op]);
 
   const handleProcess = async () => {
     if (!file) return;
@@ -54,42 +74,58 @@ const ChannelOps = () => {
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
   const ext = file?.name.split('.').pop() || 'wav';
+  const isBatchMode = batch.queue.length > 0;
+
+  const settingsPanel = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">Operation</label>
+      <Select value={op} onValueChange={(v) => setOp(v as ChannelOp)}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {OPS.map((o) => (
+            <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <p className="text-xs text-muted-foreground">{OPS.find((o) => o.value === op)?.desc}</p>
+    </div>
+  );
 
   return (
     <ToolPage tool={tool}>
-      {!file ? (
-        <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={handleFileSelect} label="Drop your audio file here" sublabel="WAV, FLAC, AIFF, MP3, OGG" />
+      {!file && !isBatchMode ? (
+        <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={handleFileSelect} multiple onMultipleFiles={handleMultipleFiles} label="Drop your audio files here" sublabel="WAV, FLAC, AIFF, MP3, OGG" />
+      ) : isBatchMode ? (
+        <div className="space-y-4">
+          {settingsPanel}
+          <BatchQueue
+            queue={batch.queue} isProcessing={batch.isProcessing} engineLoading={batch.engineLoading}
+            engineError={batch.engineError} doneCount={batch.doneCount} allDone={batch.allDone}
+            onRemoveFile={batch.removeFile} onRetryItem={(i) => batch.retryItem(i, buildJob)}
+            onDownloadAll={batch.downloadAll} onAddMore={() => addMoreRef.current?.click()}
+          />
+          <input ref={addMoreRef} type="file" accept={AUDIO_ACCEPT} multiple className="hidden" onChange={(e) => { if (e.target.files) batch.addFiles(Array.from(e.target.files)); }} />
+          <div className="flex gap-3">
+            <Button onClick={() => batch.startProcessing(buildJob)} disabled={batch.isProcessing || batch.queue.length === 0}>
+              {batch.isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {batch.isProcessing ? 'Processing...' : `Process ${batch.queue.length} files`}
+            </Button>
+            <Button variant="outline" onClick={() => batch.clearQueue()}>Clear all</Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
-          <FileInfoBar fileName={file.name} fileSize={file.size} />
-          <AudioPlayer src={file} label="Input" />
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Operation</label>
-            <Select value={op} onValueChange={(v) => setOp(v as ChannelOp)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {OPS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">{OPS.find((o) => o.value === op)?.desc}</p>
-          </div>
-
+          <FileInfoBar fileName={file!.name} fileSize={file!.size} />
+          <AudioPlayer src={file!} label="Input" />
+          {settingsPanel}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Processing..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
               <p className="text-sm text-destructive">{processError || loadError}</p>
-              {loadError && (
-                <Button variant="outline" size="sm" onClick={() => { reset(); handleProcess(); }}>
-                  Retry
-                </Button>
-              )}
+              {loadError && <Button variant="outline" size="sm" onClick={() => { reset(); handleProcess(); }}>Retry</Button>}
             </div>
           )}
-
           <div className="flex gap-3 flex-wrap">
             {audioBuffer && (
               <Button variant="secondary" onClick={handlePreview}>
@@ -104,7 +140,6 @@ const ChannelOps = () => {
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); stop(); }}>Choose different file</Button>
           </div>
-
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">Channel operation complete! {formatFileSize(outputBlob.size)}</p>

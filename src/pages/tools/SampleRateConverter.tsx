@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { BatchQueue } from '@/components/shared/BatchQueue';
 import { getToolById } from '@/config/tool-registry';
 import { SAMPLE_RATES, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { useBatchProcess } from '@/hooks/use-batch-process';
 import { resampleArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,15 +20,33 @@ const tool = getToolById('sample-rate-converter')!;
 
 const SampleRateConverter = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [targetRate, setTargetRate] = useState('48000');
+  const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const pending = useFileTransferStore.getState().consumePendingFile();
     if (pending) setFile(pending);
   }, []);
-  const [targetRate, setTargetRate] = useState('48000');
+
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  const handleMultipleFiles = (files: File[]) => {
+    if (files.length === 1) { handleFileSelect(files[0]); return; }
+    setFile(null);
+    batch.clearQueue();
+    batch.addFiles(files);
+  };
+
+  const buildJob = useCallback((f: File) => {
+    const ext = f.name.split('.').pop() || 'wav';
+    const baseName = f.name.replace(/\.[^.]+$/, '');
+    const outName = `${baseName}_${(parseInt(targetRate) / 1000).toFixed(1)}kHz.${ext}`;
+    const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const args = resampleArgs(inputName, outName, parseInt(targetRate));
+    return { inputName, outputName: outName, args };
+  }, [targetRate]);
 
   const handleResample = async () => {
     if (!file) return;
@@ -39,41 +59,57 @@ const SampleRateConverter = () => {
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'resampled';
   const ext = file?.name.split('.').pop() || 'wav';
+  const isBatchMode = batch.queue.length > 0;
+
+  const settingsPanel = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">Target Sample Rate</label>
+      <Select value={targetRate} onValueChange={setTargetRate}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {SAMPLE_RATES.map((r) => (
+            <SelectItem key={r} value={r.toString()}>{(r / 1000).toFixed(1)} kHz</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <ToolPage tool={tool}>
-      {!file ? (
-        <FileDropZone accept=".wav,.flac,.aiff" onFileSelect={handleFileSelect} label="Drop your audio file here" sublabel="WAV, FLAC, AIFF" />
+      {!file && !isBatchMode ? (
+        <FileDropZone accept=".wav,.flac,.aiff" onFileSelect={handleFileSelect} multiple onMultipleFiles={handleMultipleFiles} label="Drop your audio files here" sublabel="WAV, FLAC, AIFF" />
+      ) : isBatchMode ? (
+        <div className="space-y-4">
+          {settingsPanel}
+          <BatchQueue
+            queue={batch.queue} isProcessing={batch.isProcessing} engineLoading={batch.engineLoading}
+            engineError={batch.engineError} doneCount={batch.doneCount} allDone={batch.allDone}
+            onRemoveFile={batch.removeFile} onRetryItem={(i) => batch.retryItem(i, buildJob)}
+            onDownloadAll={batch.downloadAll} onAddMore={() => addMoreRef.current?.click()}
+          />
+          <input ref={addMoreRef} type="file" accept=".wav,.flac,.aiff" multiple className="hidden" onChange={(e) => { if (e.target.files) batch.addFiles(Array.from(e.target.files)); }} />
+          <div className="flex gap-3">
+            <Button onClick={() => batch.startProcessing(buildJob)} disabled={batch.isProcessing || batch.queue.length === 0}>
+              {batch.isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {batch.isProcessing ? 'Resampling...' : `Resample ${batch.queue.length} files`}
+            </Button>
+            <Button variant="outline" onClick={() => batch.clearQueue()}>Clear all</Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
-          <FileInfoBar fileName={file.name} fileSize={file.size} />
-          <AudioPlayer src={file} label="Input" />
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Target Sample Rate</label>
-            <Select value={targetRate} onValueChange={setTargetRate}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {SAMPLE_RATES.map((r) => (
-                  <SelectItem key={r} value={r.toString()}>{(r / 1000).toFixed(1)} kHz</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
+          <FileInfoBar fileName={file!.name} fileSize={file!.size} />
+          <AudioPlayer src={file!} label="Input" />
+          {settingsPanel}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Resampling..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
               <p className="text-sm text-destructive">{processError || loadError}</p>
-              {loadError && (
-                <Button variant="outline" size="sm" onClick={() => { reset(); handleResample(); }}>
-                  Retry
-                </Button>
-              )}
+              {loadError && <Button variant="outline" size="sm" onClick={() => { reset(); handleResample(); }}>Retry</Button>}
             </div>
           )}
-
           <div className="flex gap-3">
             <Button onClick={handleResample} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -81,7 +117,6 @@ const SampleRateConverter = () => {
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
           </div>
-
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">Resampled to {(parseInt(targetRate) / 1000).toFixed(1)} kHz — {formatFileSize(outputBlob.size)}</p>

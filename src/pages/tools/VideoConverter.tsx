@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
+import { BatchQueue } from '@/components/shared/BatchQueue';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { useBatchProcess } from '@/hooks/use-batch-process';
 import { videoConvertArgs, VIDEO_OUTPUT_FORMATS } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,15 +20,34 @@ const tool = getToolById('video-converter')!;
 
 const VideoConverter = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [outputFormat, setOutputFormat] = useState('mp4');
+  const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const pending = useFileTransferStore.getState().consumePendingFile();
     if (pending) setFile(pending);
   }, []);
-  const [outputFormat, setOutputFormat] = useState('mp4');
+
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  const handleMultipleFiles = (files: File[]) => {
+    if (files.length === 1) { handleFileSelect(files[0]); return; }
+    setFile(null);
+    batch.clearQueue();
+    batch.addFiles(files);
+  };
+
+  const buildJob = useCallback((f: File) => {
+    const fmt = VIDEO_OUTPUT_FORMATS.find(x => x.value === outputFormat);
+    const ext = fmt?.ext || 'mp4';
+    const baseName = f.name.replace(/\.[^.]+$/, '');
+    const outName = `${baseName}.${ext}`;
+    const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const args = videoConvertArgs(inputName, outName, outputFormat);
+    return { inputName, outputName: outName, args };
+  }, [outputFormat]);
 
   const handleConvert = async () => {
     if (!file) return;
@@ -39,36 +60,55 @@ const VideoConverter = () => {
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
   const fmt = VIDEO_OUTPUT_FORMATS.find((f) => f.value === outputFormat);
+  const isBatchMode = batch.queue.length > 0;
+
+  const settingsPanel = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">Output Format</label>
+      <Select value={outputFormat} onValueChange={(v) => { setOutputFormat(v); clearOutput(); }}>
+        <SelectTrigger><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {VIDEO_OUTPUT_FORMATS.map((f) => (
+            <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
 
   return (
     <ToolPage tool={tool}>
-      {!file ? (
-        <FileDropZone accept={VIDEO_ACCEPT} onFileSelect={handleFileSelect} label="Drop your video file here" sublabel="MP4, WebM, AVI, MKV, MOV" />
+      {!file && !isBatchMode ? (
+        <FileDropZone accept={VIDEO_ACCEPT} onFileSelect={handleFileSelect} multiple onMultipleFiles={handleMultipleFiles} label="Drop your video files here" sublabel="MP4, WebM, AVI, MKV, MOV" />
+      ) : isBatchMode ? (
+        <div className="space-y-4">
+          {settingsPanel}
+          <BatchQueue
+            queue={batch.queue} isProcessing={batch.isProcessing} engineLoading={batch.engineLoading}
+            engineError={batch.engineError} doneCount={batch.doneCount} allDone={batch.allDone}
+            onRemoveFile={batch.removeFile} onRetryItem={(i) => batch.retryItem(i, buildJob)}
+            onDownloadAll={batch.downloadAll} onAddMore={() => addMoreRef.current?.click()}
+          />
+          <input ref={addMoreRef} type="file" accept={VIDEO_ACCEPT} multiple className="hidden" onChange={(e) => { if (e.target.files) batch.addFiles(Array.from(e.target.files)); }} />
+          <div className="flex gap-3">
+            <Button onClick={() => batch.startProcessing(buildJob)} disabled={batch.isProcessing || batch.queue.length === 0}>
+              {batch.isProcessing && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {batch.isProcessing ? 'Converting...' : `Convert ${batch.queue.length} files`}
+            </Button>
+            <Button variant="outline" onClick={() => batch.clearQueue()}>Clear all</Button>
+          </div>
+        </div>
       ) : (
         <div className="space-y-4">
-          <FileInfoBar fileName={file.name} fileSize={file.size} />
-          <VideoPlayer src={file} label="Input video" />
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Output Format</label>
-            <Select value={outputFormat} onValueChange={(v) => { setOutputFormat(v); clearOutput(); }}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {VIDEO_OUTPUT_FORMATS.map((f) => (
-                  <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <FileInfoBar fileName={file!.name} fileSize={file!.size} />
+          <VideoPlayer src={file!} label="Input video" />
+          {settingsPanel}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Converting video..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
               <p className="text-sm text-destructive">{processError || loadError}</p>
-              {loadError && (
-                <Button variant="outline" size="sm" onClick={() => { reset(); handleConvert(); }}>
-                  Retry
-                </Button>
-              )}
+              {loadError && <Button variant="outline" size="sm" onClick={() => { reset(); handleConvert(); }}>Retry</Button>}
             </div>
           )}
           <div className="flex gap-3">
