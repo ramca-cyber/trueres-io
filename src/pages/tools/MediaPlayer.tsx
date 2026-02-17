@@ -10,11 +10,13 @@ import { LiveSpectrum } from '@/components/shared/LiveSpectrum';
 import { ToolActionGrid } from '@/components/shared/ToolActionGrid';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { ALL_MEDIA_ACCEPT, formatFileSize } from '@/config/constants';
 import {
   RotateCcw, Play, AlertTriangle, RefreshCw,
   SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Music, Film, Minimize2, BarChart3,
+  Timer, TimerOff, Download, Upload, AudioLines, VideoOff,
 } from 'lucide-react';
 import { processFile, getFFmpeg } from '@/engines/processing/ffmpeg-manager';
 import { useMiniPlayerStore } from '@/stores/mini-player-store';
@@ -64,6 +66,18 @@ async function transcodeFile(
   }
 }
 
+/** Extract audio from video via FFmpeg */
+async function extractAudio(
+  file: File,
+  onProgress: (p: number) => void,
+): Promise<Blob> {
+  const ext = getExt(file);
+  const inputName = `input.${ext}`;
+  return processFile(file, inputName, 'output.mp3', [
+    '-i', inputName, '-vn', '-ab', '192k', 'output.mp3',
+  ], onProgress);
+}
+
 type LoopMode = 'off' | 'one' | 'all';
 
 function fisherYatesShuffle(length: number): number[] {
@@ -81,6 +95,29 @@ function buildQueueItem(file: File): QueueItem {
 }
 
 const LOOP_LABELS: Record<LoopMode, string> = { off: 'Loop off', one: 'Repeat one', all: 'Repeat all' };
+const SLEEP_OPTIONS = [
+  { label: 'Off', value: 0 },
+  { label: '15m', value: 15 },
+  { label: '30m', value: 30 },
+  { label: '60m', value: 60 },
+  { label: 'End of track', value: -1 },
+];
+
+function formatCountdown(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/** Generate .m3u playlist content from queue */
+function generateM3U(queue: QueueItem[]): string {
+  const lines = ['#EXTM3U'];
+  for (const item of queue) {
+    lines.push(`#EXTINF:-1,${item.file.name}`);
+    lines.push(item.file.name);
+  }
+  return lines.join('\n');
+}
 
 export default function MediaPlayer() {
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -92,14 +129,52 @@ export default function MediaPlayer() {
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const [showSpectrum, setShowSpectrum] = useState(true);
 
+  // Phase 3 state
+  const [crossfadeSec, setCrossfadeSec] = useState(0); // 0 = off, 1-5
+  const [showCrossfade, setShowCrossfade] = useState(false);
+  const [sleepMode, setSleepMode] = useState(0); // 0=off, >0=minutes, -1=end of track
+  const [sleepRemaining, setSleepRemaining] = useState(0);
+  const [showSleep, setShowSleep] = useState(false);
+  const [audioOnlyMode, setAudioOnlyMode] = useState(false);
+  const [extractingAudio, setExtractingAudio] = useState(false);
+  const [extractProgress, setExtractProgress] = useState(-1);
+
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const playlistInputRef = useRef<HTMLInputElement>(null);
+  const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const miniPlayer = useMiniPlayerStore();
   const current = queue[currentIndex] as QueueItem | undefined;
 
-  // Transcode current track if needed
+  // ── Sleep timer logic ──
+  useEffect(() => {
+    if (sleepTimerRef.current) { clearInterval(sleepTimerRef.current); sleepTimerRef.current = null; }
+
+    if (sleepMode === 0) { setSleepRemaining(0); return; }
+    if (sleepMode === -1) { setSleepRemaining(-1); return; } // handled on track end
+
+    const totalSec = sleepMode * 60;
+    setSleepRemaining(totalSec);
+
+    sleepTimerRef.current = setInterval(() => {
+      setSleepRemaining(prev => {
+        if (prev <= 1) {
+          // Time's up — pause
+          const el = audioRef.current || videoRef.current;
+          if (el) el.pause();
+          setSleepMode(0);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => { if (sleepTimerRef.current) clearInterval(sleepTimerRef.current); };
+  }, [sleepMode]);
+
+  // ── Transcode current track if needed ──
   useEffect(() => {
     if (!current || current.status !== 'pending') return;
     let cancelled = false;
@@ -116,6 +191,32 @@ export default function MediaPlayer() {
     });
     return () => { cancelled = true; };
   }, [currentIndex, current?.id, current?.status]);
+
+  // ── Audio-only extraction for video ──
+  const handleAudioOnly = useCallback(async () => {
+    if (!current || !current.isVideo) return;
+    setExtractingAudio(true);
+    setExtractProgress(-1);
+    try {
+      const audioBlob = await extractAudio(current.file, setExtractProgress);
+      setQueue(q => q.map((item, i) => i === currentIndex ? {
+        ...item, playbackSrc: audioBlob, isVideo: false,
+      } : item));
+      setAudioOnlyMode(true);
+    } catch {
+      // Silently fail — user keeps video
+    } finally {
+      setExtractingAudio(false);
+    }
+  }, [current, currentIndex]);
+
+  const handleRestoreVideo = useCallback(() => {
+    if (!current) return;
+    setQueue(q => q.map((item, i) => i === currentIndex ? {
+      ...item, playbackSrc: item.file, isVideo: isVideoFile(item.file),
+    } : item));
+    setAudioOnlyMode(false);
+  }, [current, currentIndex]);
 
   useEffect(() => {
     if (shuffleOn && queue.length > 0) setShuffleOrder(fisherYatesShuffle(queue.length));
@@ -145,25 +246,31 @@ export default function MediaPlayer() {
   }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
 
   const handleEnded = useCallback(() => {
+    // Sleep: end of track mode
+    if (sleepMode === -1) {
+      setSleepMode(0);
+      return; // don't advance
+    }
+
     if (loopMode === 'one') {
       const el = audioRef.current || videoRef.current;
       if (el) { el.currentTime = 0; el.play(); }
       return;
     }
     const next = getNextIndex(currentIndex);
-    if (next !== null) { setCurrentIndex(next); setAutoPlay(true); }
-  }, [loopMode, currentIndex, getNextIndex]);
+    if (next !== null) { setCurrentIndex(next); setAutoPlay(true); setAudioOnlyMode(false); }
+  }, [loopMode, currentIndex, getNextIndex, sleepMode]);
 
   const handleNext = useCallback(() => {
     const next = getNextIndex(currentIndex);
-    if (next !== null) { setCurrentIndex(next); setAutoPlay(true); }
+    if (next !== null) { setCurrentIndex(next); setAutoPlay(true); setAudioOnlyMode(false); }
   }, [currentIndex, getNextIndex]);
 
   const handlePrev = useCallback(() => {
     const el = audioRef.current || videoRef.current;
     if (el && el.currentTime > 3) { el.currentTime = 0; return; }
     const prev = getPrevIndex(currentIndex);
-    if (prev !== null) { setCurrentIndex(prev); setAutoPlay(true); }
+    if (prev !== null) { setCurrentIndex(prev); setAutoPlay(true); setAudioOnlyMode(false); }
   }, [currentIndex, getPrevIndex]);
 
   const handleFilesSelect = useCallback((files: File[]) => {
@@ -173,7 +280,7 @@ export default function MediaPlayer() {
   }, [queue.length]);
 
   const handleSingleFile = useCallback((file: File) => handleFilesSelect([file]), [handleFilesSelect]);
-  const handleSelect = useCallback((index: number) => { setCurrentIndex(index); setAutoPlay(true); }, []);
+  const handleSelect = useCallback((index: number) => { setCurrentIndex(index); setAutoPlay(true); setAudioOnlyMode(false); }, []);
 
   const handleRemove = useCallback((index: number) => {
     setQueue(q => { const n = [...q]; n.splice(index, 1); return n; });
@@ -190,17 +297,34 @@ export default function MediaPlayer() {
 
   const handleClear = useCallback(() => {
     setQueue([]); setCurrentIndex(0); setAutoPlay(false); setShuffleOn(false); setAnalyserNode(null);
+    setSleepMode(0); setAudioOnlyMode(false);
   }, []);
 
   const handleAddFiles = useCallback(() => fileInputRef.current?.click(), []);
   const cycleLoop = useCallback(() => setLoopMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'), []);
 
   const handleMinimize = useCallback(() => {
-    if (queue.length > 0) {
-      miniPlayer.activate(queue, currentIndex);
-      miniPlayer.setPlaying(true);
-    }
+    if (queue.length > 0) { miniPlayer.activate(queue, currentIndex); miniPlayer.setPlaying(true); }
   }, [queue, currentIndex, miniPlayer]);
+
+  // ── Export playlist ──
+  const handleExportPlaylist = useCallback(() => {
+    if (queue.length === 0) return;
+    const content = generateM3U(queue);
+    const blob = new Blob([content], { type: 'audio/mpegurl' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'playlist.m3u';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [queue]);
+
+  // ── Import playlist (just re-triggers file picker — actual .m3u files list filenames but can't restore File objects) ──
+  // Instead, we use the import to let users re-add files
+  const handleImportPlaylist = useCallback(() => {
+    playlistInputRef.current?.click();
+  }, []);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -218,10 +342,13 @@ export default function MediaPlayer() {
   const hasQueue = queue.length > 0;
   const trackNum = queue.length > 0 ? `${currentIndex + 1} / ${queue.length}` : '';
   const isAudioTrack = current && !current.isVideo;
+  const isVideoTrack = current && current.isVideo;
 
   return (
     <ToolPage tool={tool}>
       <input ref={fileInputRef} type="file" accept={ALL_MEDIA_ACCEPT} multiple className="hidden"
+        onChange={(e) => { if (e.target.files?.length) { handleFilesSelect(Array.from(e.target.files)); e.target.value = ''; } }} />
+      <input ref={playlistInputRef} type="file" accept={ALL_MEDIA_ACCEPT} multiple className="hidden"
         onChange={(e) => { if (e.target.files?.length) { handleFilesSelect(Array.from(e.target.files)); e.target.value = ''; } }} />
 
       {!hasQueue ? (
@@ -244,7 +371,6 @@ export default function MediaPlayer() {
             <MetadataDisplay file={current.file} />
           )}
 
-          {/* Fallback now-playing for video or when no metadata */}
           {current && (current.isVideo || current.status !== 'ready') && (
             <div className="flex items-center gap-3 px-1">
               <div className={cn('flex items-center justify-center h-8 w-8 rounded-lg shrink-0',
@@ -261,8 +387,24 @@ export default function MediaPlayer() {
             </div>
           )}
 
+          {/* ── Audio extraction progress ── */}
+          {extractingAudio && (
+            <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="h-5 w-5 text-primary animate-spin shrink-0" />
+                <div>
+                  <p className="font-medium text-sm">Extracting audio…</p>
+                  <p className="text-xs text-muted-foreground">{current?.file.name}</p>
+                </div>
+              </div>
+              <ProgressBar value={extractProgress}
+                label={extractProgress >= 0 ? `${extractProgress}%` : undefined}
+                sublabel="Stripping video track" />
+            </div>
+          )}
+
           {/* ── Player area ── */}
-          {current && current.status === 'transcoding' ? (
+          {!extractingAudio && current && current.status === 'transcoding' ? (
             <div className="rounded-xl border border-border bg-card p-5 space-y-4">
               <div className="flex items-center gap-3">
                 <RefreshCw className="h-5 w-5 text-primary animate-spin shrink-0" />
@@ -275,7 +417,7 @@ export default function MediaPlayer() {
                 label={current.progress != null && current.progress >= 0 ? `${current.progress}%` : undefined}
                 sublabel="This may take a moment for large files" />
             </div>
-          ) : current && current.status === 'error' ? (
+          ) : !extractingAudio && current && current.status === 'error' ? (
             <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5 space-y-3">
               <div className="flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
@@ -292,7 +434,7 @@ export default function MediaPlayer() {
                   <SkipForward className="h-3.5 w-3.5 mr-1.5" /> Skip</Button>
               </div>
             </div>
-          ) : current && current.status === 'ready' && current.playbackSrc ? (
+          ) : !extractingAudio && current && current.status === 'ready' && current.playbackSrc ? (
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="p-4">
                 {current.isVideo ? (
@@ -303,7 +445,6 @@ export default function MediaPlayer() {
                 )}
               </div>
 
-              {/* Live spectrum visualization */}
               {isAudioTrack && showSpectrum && analyserNode && (
                 <div className="px-4 pb-4">
                   <LiveSpectrum analyserNode={analyserNode} height={48} barCount={64} />
@@ -313,7 +454,7 @@ export default function MediaPlayer() {
           ) : null}
 
           {/* ── Transport controls ── */}
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1 flex-wrap">
             {queue.length > 1 && (
               <Button variant="ghost" size="sm" onClick={() => setShuffleOn(s => !s)}
                 className={cn('h-8 w-8 p-0', shuffleOn && 'text-primary bg-primary/10')}
@@ -343,7 +484,7 @@ export default function MediaPlayer() {
               </Button>
             )}
 
-            {/* Spectrum toggle (audio only) */}
+            {/* Spectrum toggle */}
             {isAudioTrack && current?.status === 'ready' && (
               <Button variant="ghost" size="sm" onClick={() => setShowSpectrum(s => !s)}
                 className={cn('h-8 w-8 p-0', showSpectrum && 'text-primary bg-primary/10')}
@@ -352,7 +493,70 @@ export default function MediaPlayer() {
               </Button>
             )}
 
-            {/* Mini-player (audio only, non-video) */}
+            {/* Crossfade */}
+            {queue.length > 1 && (
+              <div className="relative">
+                <Button variant="ghost" size="sm" onClick={() => setShowCrossfade(s => !s)}
+                  className={cn('h-8 px-2 gap-1 text-xs', crossfadeSec > 0 && 'text-primary bg-primary/10')}
+                  title={crossfadeSec > 0 ? `Crossfade: ${crossfadeSec}s` : 'Crossfade off'}>
+                  <AudioLines className="h-3.5 w-3.5" />
+                  <span className="font-mono text-[10px]">{crossfadeSec > 0 ? `${crossfadeSec}s` : 'X'}</span>
+                </Button>
+                {showCrossfade && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-lg border border-border bg-card p-3 shadow-lg z-20 w-48">
+                    <p className="text-xs text-muted-foreground mb-2">Crossfade duration</p>
+                    <Slider min={0} max={5} step={1} value={[crossfadeSec]}
+                      onValueChange={([v]) => setCrossfadeSec(v)} />
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[10px] text-muted-foreground">Off</span>
+                      <span className="text-[10px] text-muted-foreground">5s</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Sleep timer */}
+            <div className="relative">
+              <Button variant="ghost" size="sm" onClick={() => setShowSleep(s => !s)}
+                className={cn('h-8 px-2 gap-1 text-xs', sleepMode !== 0 && 'text-primary bg-primary/10')}
+                title={sleepMode === 0 ? 'Sleep timer' : sleepMode === -1 ? 'Stop after track' : `Sleep: ${formatCountdown(sleepRemaining)}`}>
+                {sleepMode !== 0 ? <TimerOff className="h-3.5 w-3.5" /> : <Timer className="h-3.5 w-3.5" />}
+                {sleepMode > 0 && <span className="font-mono text-[10px]">{formatCountdown(sleepRemaining)}</span>}
+                {sleepMode === -1 && <span className="font-mono text-[10px]">EoT</span>}
+              </Button>
+              {showSleep && (
+                <div className="absolute bottom-full right-0 mb-2 rounded-lg border border-border bg-card p-2 shadow-lg z-20 min-w-[140px]">
+                  {SLEEP_OPTIONS.map(opt => (
+                    <button key={opt.value} onClick={() => { setSleepMode(opt.value); setShowSleep(false); }}
+                      className={cn('w-full text-left px-3 py-1.5 rounded text-xs transition-colors',
+                        sleepMode === opt.value ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-muted-foreground')}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Audio-only for video */}
+            {isVideoTrack && current?.status === 'ready' && !extractingAudio && (
+              <Button variant="ghost" size="sm" onClick={handleAudioOnly}
+                className="h-8 px-2 gap-1 text-xs" title="Audio-only mode">
+                <VideoOff className="h-3.5 w-3.5" />
+                <span className="text-[10px]">Audio only</span>
+              </Button>
+            )}
+
+            {/* Restore video if in audio-only */}
+            {audioOnlyMode && (
+              <Button variant="ghost" size="sm" onClick={handleRestoreVideo}
+                className="h-8 px-2 gap-1 text-xs text-primary" title="Restore video">
+                <Film className="h-3.5 w-3.5" />
+                <span className="text-[10px]">Video</span>
+              </Button>
+            )}
+
+            {/* Mini-player */}
             {isAudioTrack && current?.status === 'ready' && (
               <Button variant="ghost" size="sm" onClick={handleMinimize}
                 className="h-8 w-8 p-0" title="Minimize to mini-player">
@@ -364,6 +568,18 @@ export default function MediaPlayer() {
           {/* ── Playlist panel ── */}
           <PlaylistPanel queue={queue} currentIndex={currentIndex} onSelect={handleSelect}
             onRemove={handleRemove} onReorder={handleReorder} onAddFiles={handleAddFiles} onClear={handleClear} />
+
+          {/* ── Playlist utilities ── */}
+          {queue.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleExportPlaylist}>
+                <Download className="h-3 w-3" /> Export .m3u
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleImportPlaylist}>
+                <Upload className="h-3 w-3" /> Add files
+              </Button>
+            </div>
+          )}
 
           {/* ── Cross-tool actions ── */}
           {current && current.status === 'ready' && (
