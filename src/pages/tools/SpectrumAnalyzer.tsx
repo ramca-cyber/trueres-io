@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -37,7 +37,6 @@ const SpectrumAnalyzer = () => {
   const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Find peak frequency
   let peakFreq: number | null = null;
   let peakMag: number | null = null;
   if (spectrumData) {
@@ -51,18 +50,16 @@ const SpectrumAnalyzer = () => {
     }
   }
 
-  // Cursor readout
-  const cursorReadout = useMemo(() => {
-    if (!viz.cursor || !spectrumData) return undefined;
+  const cursorLabel = useCallback((dataX: number, dataY: number) => {
+    if (!spectrumData) return '';
     const maxFreq = spectrumData.frequencies[spectrumData.frequencies.length - 1] || 22050;
     const minFreq = Math.max(20, spectrumData.frequencies[1] || 20);
     const logMin = Math.log10(minFreq);
     const logMax = Math.log10(maxFreq);
-    const freq = Math.pow(10, logMin + viz.cursor.dataX * (logMax - logMin));
-    const db = -100 + viz.cursor.dataY * 100; // map Y back to dB (inverted: top=0, bottom=-100)
-    const dbVal = -100 + (1 - viz.cursor.dataY) * 100;
+    const freq = Math.pow(10, logMin + dataX * (logMax - logMin));
+    const dbVal = -100 + (1 - dataY) * 100;
     return `${formatFrequency(freq)} / ${dbVal.toFixed(0)} dB`;
-  }, [viz.cursor, spectrumData]);
+  }, [spectrumData]);
 
   if (!fileName) {
     return (
@@ -75,12 +72,7 @@ const SpectrumAnalyzer = () => {
   return (
     <ToolPage tool={tool}>
       <div className="space-y-4">
-        <FileInfoBar
-          fileName={fileName} fileSize={fileSize}
-          format={headerInfo?.format} duration={headerInfo?.duration}
-          sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth}
-          channels={headerInfo?.channels}
-        />
+        <FileInfoBar fileName={fileName} fileSize={fileSize} format={headerInfo?.format} duration={headerInfo?.duration} sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth} channels={headerInfo?.channels} />
         {file && <AudioPlayer src={file} label="Preview" />}
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!spectrumData && pcm && <ProgressBar value={50} label="Computing spectrum..." />}
@@ -88,36 +80,21 @@ const SpectrumAnalyzer = () => {
         {spectrumData && (
           <>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              <MetricCard
-                label="Peak Frequency"
-                value={peakFreq !== null ? formatFrequency(peakFreq) : '—'}
-                subtext="Dominant frequency"
-                status="info"
-              />
-              <MetricCard
-                label="Peak Magnitude"
-                value={peakMag !== null ? `${peakMag.toFixed(1)} dB` : '—'}
-                subtext="At peak frequency"
-                status="neutral"
-              />
-              <MetricCard
-                label="Nyquist"
-                value={headerInfo?.sampleRate ? formatFrequency(headerInfo.sampleRate / 2) : '—'}
-                subtext="Maximum representable freq"
-                status="neutral"
-              />
+              <MetricCard label="Peak Frequency" value={peakFreq !== null ? formatFrequency(peakFreq) : '—'} subtext="Dominant frequency" status="info" />
+              <MetricCard label="Peak Magnitude" value={peakMag !== null ? `${peakMag.toFixed(1)} dB` : '—'} subtext="At peak frequency" status="neutral" />
+              <MetricCard label="Nyquist" value={headerInfo?.sampleRate ? formatFrequency(headerInfo.sampleRate / 2) : '—'} subtext="Maximum representable freq" status="neutral" />
             </div>
             <div ref={containerRef} className="space-y-2">
               <VizToolbar
                 zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
-                cursorReadout={cursorReadout}
                 fullscreen={{ containerRef }}
                 download={{ canvasRef: viz.canvasRef, filename: `${fileName}-spectrum.png` }}
               />
               <SpectrumCanvas
                 data={spectrumData as unknown as SpectrumData}
                 viewport={viz.viewport}
-                cursor={viz.cursor}
+                cursorRef={viz.cursorRef}
+                cursorLabel={cursorLabel}
                 canvasHandlers={viz.handlers}
                 canvasRef={viz.canvasRef}
               />

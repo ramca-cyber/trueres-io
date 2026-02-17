@@ -1,18 +1,17 @@
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, type RefObject } from 'react';
 import { type SpectrogramData } from '@/types/analysis';
 import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface SpectrogramCanvasProps {
   data: SpectrogramData;
-  width?: number;
-  height?: number;
   colormap?: 'magma' | 'inferno' | 'viridis' | 'plasma' | 'grayscale';
   minDb?: number;
   maxDb?: number;
   ceilingHz?: number;
   showCdNyquist?: boolean;
   viewport?: Viewport;
-  cursor?: CursorData | null;
+  cursorRef?: RefObject<CursorData | null>;
+  cursorLabel?: (dataX: number, dataY: number) => string;
   canvasHandlers?: Record<string, any>;
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
@@ -110,22 +109,45 @@ const LUTS: Record<string, Uint8Array> = {
 
 export function SpectrogramCanvas({
   data,
-  width = 900,
-  height = 400,
   colormap = 'magma',
   minDb = -120,
   maxDb = 0,
   ceilingHz,
   showCdNyquist = false,
   viewport,
-  cursor,
+  cursorRef,
+  cursorLabel,
   canvasHandlers,
   canvasRef: externalRef,
 }: SpectrogramCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement>(null);
   const ref = externalRef || internalRef;
   const lut = useMemo(() => LUTS[colormap] || LUTS.magma, [colormap]);
+  const sizeRef = useRef({ w: 0, h: 0 });
+  const rafRef = useRef<number>(0);
 
+  // ResizeObserver to match canvas pixel buffer to rendered size
+  useEffect(() => {
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
+    if (!canvas) return;
+
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.round(entry.contentRect.width * dpr);
+        const h = Math.round(entry.contentRect.height * dpr);
+        if (w > 0 && h > 0 && (w !== sizeRef.current.w || h !== sizeRef.current.h)) {
+          sizeRef.current = { w, h };
+          canvas.width = w;
+          canvas.height = h;
+        }
+      }
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  // Main data paint — does NOT depend on cursor
   useEffect(() => {
     const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
     if (!canvas || !data.magnitudes.length) return;
@@ -133,15 +155,15 @@ export function SpectrogramCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    canvas.width = width;
-    canvas.height = height;
+    const width = canvas.width;
+    const height = canvas.height;
+    if (width === 0 || height === 0) return;
 
     const numFrames = data.magnitudes.length;
     const numBins = data.magnitudes[0].length;
     const dbRange = maxDb - minDb;
     const nyquist = data.sampleRate / 2;
 
-    // Viewport slicing
     const xMin = viewport?.xMin ?? 0;
     const xMax = viewport?.xMax ?? 1;
     const yMin = viewport?.yMin ?? 0;
@@ -149,7 +171,6 @@ export function SpectrogramCanvas({
 
     const startFrame = Math.floor(xMin * numFrames);
     const endFrame = Math.ceil(xMax * numFrames);
-    // Y: yMin=0 means bottom (low freq), yMax=1 means top (high freq)
     const startBin = Math.floor(yMin * numBins);
     const endBin = Math.ceil(yMax * numBins);
 
@@ -160,8 +181,7 @@ export function SpectrogramCanvas({
       const frameIdx = Math.min(endFrame - 1, startFrame + ((dx / width * (endFrame - startFrame)) | 0));
       const frame = data.magnitudes[frameIdx];
       for (let dy = 0; dy < height; dy++) {
-        // dy=0 is top (high freq), dy=height-1 is bottom (low freq)
-        const binFrac = 1 - dy / height; // 0 at bottom, 1 at top
+        const binFrac = 1 - dy / height;
         const binIdx = Math.min(endBin - 1, startBin + ((binFrac * (endBin - startBin)) | 0));
         const db = frame[binIdx];
         const t = Math.max(0, Math.min(1, (db - minDb) / dbRange));
@@ -177,17 +197,15 @@ export function SpectrogramCanvas({
 
     ctx.putImageData(imgData, 0, 0);
 
-    // Overlay lines - adjust for viewport
-    ctx.font = '10px monospace';
+    // Overlay lines
+    ctx.font = `${Math.round(10 * (window.devicePixelRatio || 1))}px monospace`;
 
-    // Helper: freq to Y position considering viewport
     const freqToY = (freq: number) => {
-      const binFrac = freq / nyquist; // 0..1
-      const viewFrac = (binFrac - yMin) / (yMax - yMin); // normalized in viewport
+      const binFrac = freq / nyquist;
+      const viewFrac = (binFrac - yMin) / (yMax - yMin);
       return (1 - viewFrac) * height;
     };
 
-    // Bandwidth ceiling line
     if (ceilingHz && ceilingHz < nyquist) {
       const yPos = freqToY(ceilingHz);
       if (yPos >= 0 && yPos <= height) {
@@ -205,7 +223,6 @@ export function SpectrogramCanvas({
       }
     }
 
-    // CD Nyquist reference line (22.05 kHz)
     if (showCdNyquist && nyquist > 22050) {
       const cdY = freqToY(22050);
       if (cdY >= 0 && cdY <= height) {
@@ -244,40 +261,93 @@ export function SpectrogramCanvas({
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     const totalDuration = data.times[data.times.length - 1] || 0;
-    const viewStartTime = xMin * totalDuration;
-    const viewEndTime = xMax * totalDuration;
+    const viewStartTime = (viewport?.xMin ?? 0) * totalDuration;
+    const viewEndTime = (viewport?.xMax ?? 1) * totalDuration;
     const timeLabels = 5;
     for (let i = 0; i <= timeLabels; i++) {
       const t = viewStartTime + (i / timeLabels) * (viewEndTime - viewStartTime);
       const x = (i / timeLabels) * width;
       ctx.fillText(`${t.toFixed(1)}s`, x, height - 4);
     }
+  }, [data, lut, minDb, maxDb, ceilingHz, showCdNyquist, viewport, ref, sizeRef.current.w, sizeRef.current.h]);
 
-    // Crosshair cursor
-    if (cursor) {
-      const cx = cursor.normX * width;
-      const cy = cursor.normY * height;
-      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(cx, 0);
-      ctx.lineTo(cx, height);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, cy);
-      ctx.lineTo(width, cy);
-      ctx.stroke();
-      ctx.setLineDash([]);
+  // Crosshair overlay via rAF — reads cursorRef, no React re-renders
+  useEffect(() => {
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
+    if (!canvas || !cursorRef) return;
+
+    // We use a second overlay canvas for the crosshair to avoid re-rendering the spectrogram
+    let overlayCanvas = canvas.parentElement?.querySelector<HTMLCanvasElement>('.viz-cursor-overlay');
+    if (!overlayCanvas) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.className = 'viz-cursor-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.inset = '0';
+      overlayCanvas.style.pointerEvents = 'none';
+      overlayCanvas.style.width = '100%';
+      overlayCanvas.style.height = '100%';
+      canvas.parentElement?.appendChild(overlayCanvas);
     }
-  }, [data, width, height, lut, minDb, maxDb, ceilingHz, showCdNyquist, viewport, cursor, ref]);
+
+    let running = true;
+    const draw = () => {
+      if (!running) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      if (overlayCanvas!.width !== w || overlayCanvas!.height !== h) {
+        overlayCanvas!.width = w;
+        overlayCanvas!.height = h;
+      }
+      const ctx = overlayCanvas!.getContext('2d')!;
+      ctx.clearRect(0, 0, w, h);
+
+      const cursor = cursorRef.current;
+      if (cursor) {
+        const cx = cursor.normX * w;
+        const cy = cursor.normY * h;
+        ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, h);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, cy);
+        ctx.lineTo(w, cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Draw readout text on canvas
+        if (cursorLabel) {
+          const label = cursorLabel(cursor.dataX, cursor.dataY);
+          const fontSize = Math.round(11 * (window.devicePixelRatio || 1));
+          ctx.font = `${fontSize}px monospace`;
+          const metrics = ctx.measureText(label);
+          const pad = 4 * (window.devicePixelRatio || 1);
+          const textX = Math.min(cx + pad, w - metrics.width - pad);
+          const textY = Math.max(cy - pad, fontSize + pad);
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(textX - 2, textY - fontSize, metrics.width + 4, fontSize + 4);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(label, textX, textY);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    rafRef.current = requestAnimationFrame(draw);
+    return () => { running = false; cancelAnimationFrame(rafRef.current); overlayCanvas?.remove(); };
+  }, [ref, cursorRef, cursorLabel]);
 
   return (
-    <canvas
-      ref={ref as React.RefObject<HTMLCanvasElement>}
-      className="w-full rounded-md border border-border"
-      style={{ imageRendering: 'auto', cursor: 'crosshair' }}
-      {...canvasHandlers}
-    />
+    <div style={{ position: 'relative' }}>
+      <canvas
+        ref={ref as React.RefObject<HTMLCanvasElement>}
+        className="w-full rounded-md border border-border"
+        style={{ imageRendering: 'auto', cursor: 'crosshair', height: '400px' }}
+        {...canvasHandlers}
+      />
+    </div>
   );
 }

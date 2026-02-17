@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -37,22 +37,19 @@ const WaveformViewer = () => {
   const viz = useVizViewport({ lockY: true, maxZoomX: 64 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Compute peak from waveform data
   const peakLevel = waveformData
     ? Math.max(...Array.from(waveformData.peaks))
     : null;
   const peakDb = peakLevel && peakLevel > 0 ? 20 * Math.log10(peakLevel) : null;
 
-  // Cursor readout
-  const cursorReadout = useMemo(() => {
-    if (!viz.cursor || !waveformData || !headerInfo?.duration) return undefined;
-    const time = viz.cursor.dataX * headerInfo.duration;
-    // Find amplitude at cursor position
-    const bucketIdx = Math.floor(viz.cursor.dataX * waveformData.peaks.length);
+  const cursorLabel = useCallback((dataX: number, _dataY: number) => {
+    if (!waveformData || !headerInfo?.duration) return '';
+    const time = dataX * headerInfo.duration;
+    const bucketIdx = Math.floor(dataX * waveformData.peaks.length);
     const amp = waveformData.peaks[Math.min(bucketIdx, waveformData.peaks.length - 1)] || 0;
     const db = amp > 0 ? (20 * Math.log10(amp)).toFixed(1) : '-∞';
     return `${time.toFixed(2)}s / ${db} dBFS`;
-  }, [viz.cursor, waveformData, headerInfo?.duration]);
+  }, [waveformData, headerInfo?.duration]);
 
   if (!fileName) {
     return (
@@ -75,24 +72,9 @@ const WaveformViewer = () => {
 
         {waveformData && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <MetricCard
-              label="Duration"
-              value={headerInfo?.duration ? `${headerInfo.duration.toFixed(1)}s` : '—'}
-              subtext="Total length"
-              status="neutral"
-            />
-            <MetricCard
-              label="Peak Level"
-              value={peakDb !== null ? `${peakDb.toFixed(1)} dBFS` : '—'}
-              subtext={peakDb !== null && peakDb > -0.3 ? 'Near clipping' : 'Maximum amplitude'}
-              status={peakDb !== null && peakDb > -0.3 ? 'warn' : 'pass'}
-            />
-            <MetricCard
-              label="Channels"
-              value={headerInfo?.channels === 2 ? 'Stereo' : headerInfo?.channels === 1 ? 'Mono' : `${headerInfo?.channels ?? '?'}ch`}
-              subtext={`${headerInfo?.channels ?? '?'} channel(s)`}
-              status="info"
-            />
+            <MetricCard label="Duration" value={headerInfo?.duration ? `${headerInfo.duration.toFixed(1)}s` : '—'} subtext="Total length" status="neutral" />
+            <MetricCard label="Peak Level" value={peakDb !== null ? `${peakDb.toFixed(1)} dBFS` : '—'} subtext={peakDb !== null && peakDb > -0.3 ? 'Near clipping' : 'Maximum amplitude'} status={peakDb !== null && peakDb > -0.3 ? 'warn' : 'pass'} />
+            <MetricCard label="Channels" value={headerInfo?.channels === 2 ? 'Stereo' : headerInfo?.channels === 1 ? 'Mono' : `${headerInfo?.channels ?? '?'}ch`} subtext={`${headerInfo?.channels ?? '?'} channel(s)`} status="info" />
           </div>
         )}
 
@@ -103,14 +85,14 @@ const WaveformViewer = () => {
           <div ref={containerRef} className="space-y-2">
             <VizToolbar
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
-              cursorReadout={cursorReadout}
               fullscreen={{ containerRef }}
               download={{ canvasRef: viz.canvasRef, filename: `${fileName}-waveform.png` }}
             />
             <WaveformCanvas
               data={waveformData as WaveformData}
               viewport={viz.viewport}
-              cursor={viz.cursor}
+              cursorRef={viz.cursorRef}
+              cursorLabel={cursorLabel}
               canvasHandlers={viz.handlers}
               canvasRef={viz.canvasRef}
             />

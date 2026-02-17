@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -25,7 +25,6 @@ const IRViewer = () => {
     const decoded = await ctx.decodeAudioData(arrayBuf);
     setBuffer(decoded);
 
-    // Estimate RT60 from energy decay
     const data = decoded.getChannelData(0);
     const blockSize = Math.floor(decoded.sampleRate / 100);
     const blocks = Math.floor(data.length / blockSize);
@@ -61,15 +60,14 @@ const IRViewer = () => {
     ctx.close();
   }, []);
 
-  // Draw waveform with viewport support
+  // Waveform paint — reads cursorRef in rAF overlay, not as dep
   useEffect(() => {
     const canvas = waveViz.canvasRef.current;
     if (!buffer || !canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const w = 800;
-    const h = 200;
-    canvas.width = w;
-    canvas.height = h;
+    const w = canvas.width || 800;
+    const h = canvas.height || 200;
+    if (w === 0 || h === 0) return;
 
     ctx.fillStyle = 'hsl(0, 0%, 7%)';
     ctx.fillRect(0, 0, w, h);
@@ -79,7 +77,6 @@ const IRViewer = () => {
     const startSample = Math.floor(vp.xMin * data.length);
     const endSample = Math.ceil(vp.xMax * data.length);
     const visibleLength = endSample - startSample;
-    const step = Math.max(1, Math.floor(visibleLength / w));
 
     ctx.beginPath();
     ctx.strokeStyle = 'hsl(200, 80%, 60%)';
@@ -91,30 +88,16 @@ const IRViewer = () => {
       else ctx.lineTo(x, y);
     }
     ctx.stroke();
+  }, [buffer, waveViz.viewport]);
 
-    // Crosshair
-    if (waveViz.cursor) {
-      const cx = waveViz.cursor.normX * w;
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(cx, 0);
-      ctx.lineTo(cx, h);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-  }, [buffer, waveViz.viewport, waveViz.cursor]);
-
-  // Draw frequency response with viewport support
+  // Freq response paint
   useEffect(() => {
     const canvas = freqViz.canvasRef.current;
     if (!buffer || !canvas) return;
     const ctx = canvas.getContext('2d')!;
-    const w = 800;
-    const h = 250;
-    canvas.width = w;
-    canvas.height = h;
+    const w = canvas.width || 800;
+    const h = canvas.height || 250;
+    if (w === 0 || h === 0) return;
 
     ctx.fillStyle = 'hsl(0, 0%, 7%)';
     ctx.fillRect(0, 0, w, h);
@@ -157,7 +140,6 @@ const IRViewer = () => {
       }
       ctx.stroke();
 
-      // Labels
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = '10px sans-serif';
       [100, 1000, 10000].forEach(freq => {
@@ -165,11 +147,93 @@ const IRViewer = () => {
         const x = (Math.log10(freq) - viewLogMin) / viewLogRange * w;
         ctx.fillText(freq >= 1000 ? `${freq / 1000}k` : `${freq}`, x + 2, h - 4);
       });
+    });
+  }, [buffer, freqViz.viewport]);
 
-      // Crosshair
-      if (freqViz.cursor) {
-        const cx = freqViz.cursor.normX * w;
-        const cy = freqViz.cursor.normY * h;
+  // Crosshair overlays via rAF for both canvases
+  useEffect(() => {
+    const canvas = waveViz.canvasRef.current;
+    if (!canvas) return;
+    let overlayCanvas = canvas.parentElement?.querySelector<HTMLCanvasElement>('.viz-cursor-overlay');
+    if (!overlayCanvas) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.className = 'viz-cursor-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.inset = '0';
+      overlayCanvas.style.pointerEvents = 'none';
+      overlayCanvas.style.width = '100%';
+      overlayCanvas.style.height = '100%';
+      canvas.parentElement?.appendChild(overlayCanvas);
+    }
+    let running = true;
+    const draw = () => {
+      if (!running) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      if (overlayCanvas!.width !== w || overlayCanvas!.height !== h) {
+        overlayCanvas!.width = w;
+        overlayCanvas!.height = h;
+      }
+      const ctx = overlayCanvas!.getContext('2d')!;
+      ctx.clearRect(0, 0, w, h);
+      const cursor = waveViz.cursorRef.current;
+      if (cursor && buffer) {
+        const cx = cursor.normX * w;
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, h);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const time = cursor.dataX * buffer.duration;
+        const label = `${(time * 1000).toFixed(1)} ms`;
+        const fontSize = Math.round(11 * (window.devicePixelRatio || 1));
+        ctx.font = `${fontSize}px monospace`;
+        const metrics = ctx.measureText(label);
+        const pad = 4 * (window.devicePixelRatio || 1);
+        const textX = Math.min(cx + pad, w - metrics.width - pad);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(textX - 2, pad, metrics.width + 4, fontSize + 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillText(label, textX, pad + fontSize);
+      }
+      requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw);
+    return () => { running = false; overlayCanvas?.remove(); };
+  }, [buffer, waveViz.cursorRef]);
+
+  useEffect(() => {
+    const canvas = freqViz.canvasRef.current;
+    if (!canvas) return;
+    let overlayCanvas = canvas.parentElement?.querySelector<HTMLCanvasElement>('.viz-cursor-overlay');
+    if (!overlayCanvas) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.className = 'viz-cursor-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.inset = '0';
+      overlayCanvas.style.pointerEvents = 'none';
+      overlayCanvas.style.width = '100%';
+      overlayCanvas.style.height = '100%';
+      canvas.parentElement?.appendChild(overlayCanvas);
+    }
+    let running = true;
+    const draw = () => {
+      if (!running) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      if (overlayCanvas!.width !== w || overlayCanvas!.height !== h) {
+        overlayCanvas!.width = w;
+        overlayCanvas!.height = h;
+      }
+      const ctx = overlayCanvas!.getContext('2d')!;
+      ctx.clearRect(0, 0, w, h);
+      const cursor = freqViz.cursorRef.current;
+      if (cursor) {
+        const cx = cursor.normX * w;
+        const cy = cursor.normY * h;
         ctx.strokeStyle = 'rgba(255,255,255,0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
@@ -182,25 +246,27 @@ const IRViewer = () => {
         ctx.lineTo(w, cy);
         ctx.stroke();
         ctx.setLineDash([]);
+        const logMin = Math.log10(20);
+        const logMax = Math.log10(20000);
+        const freq = Math.pow(10, logMin + cursor.dataX * (logMax - logMin));
+        const db = -100 + (1 - cursor.dataY) * 100;
+        const label = `${freq >= 1000 ? `${(freq / 1000).toFixed(1)}k` : Math.round(freq)} Hz / ${db.toFixed(0)} dB`;
+        const fontSize = Math.round(11 * (window.devicePixelRatio || 1));
+        ctx.font = `${fontSize}px monospace`;
+        const metrics = ctx.measureText(label);
+        const pad = 4 * (window.devicePixelRatio || 1);
+        const textX = Math.min(cx + pad, w - metrics.width - pad);
+        const textY = Math.max(cy - pad, fontSize + pad);
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(textX - 2, textY - fontSize, metrics.width + 4, fontSize + 4);
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.fillText(label, textX, textY);
       }
-    });
-  }, [buffer, freqViz.viewport, freqViz.cursor]);
-
-  // Cursor readouts
-  const waveCursorReadout = useMemo(() => {
-    if (!waveViz.cursor || !buffer) return undefined;
-    const time = waveViz.cursor.dataX * buffer.duration;
-    return `${(time * 1000).toFixed(1)} ms`;
-  }, [waveViz.cursor, buffer]);
-
-  const freqCursorReadout = useMemo(() => {
-    if (!freqViz.cursor) return undefined;
-    const logMin = Math.log10(20);
-    const logMax = Math.log10(20000);
-    const freq = Math.pow(10, logMin + freqViz.cursor.dataX * (logMax - logMin));
-    const db = -100 + (1 - freqViz.cursor.dataY) * 100;
-    return `${freq >= 1000 ? `${(freq / 1000).toFixed(1)}k` : Math.round(freq)} Hz / ${db.toFixed(0)} dB`;
-  }, [freqViz.cursor]);
+      requestAnimationFrame(draw);
+    };
+    requestAnimationFrame(draw);
+    return () => { running = false; overlayCanvas?.remove(); };
+  }, [freqViz.cursorRef]);
 
   return (
     <ToolPage tool={tool}>
@@ -217,47 +283,41 @@ const IRViewer = () => {
               <MetricCard label="Duration" value={`${(buffer.duration * 1000).toFixed(0)} ms`} />
               <MetricCard label="Sample Rate" value={`${buffer.sampleRate} Hz`} />
               <MetricCard label="Channels" value={String(buffer.numberOfChannels)} />
-              <MetricCard
-                label="RT60 (est.)"
-                value={rt60 ? `${rt60.toFixed(2)}s` : 'N/A'}
-                status={rt60 && rt60 < 0.5 ? 'pass' : rt60 && rt60 < 1 ? 'warn' : 'info'}
-              />
+              <MetricCard label="RT60 (est.)" value={rt60 ? `${rt60.toFixed(2)}s` : 'N/A'} status={rt60 && rt60 < 0.5 ? 'pass' : rt60 && rt60 < 1 ? 'warn' : 'info'} />
             </div>
 
             <div ref={waveContainerRef} className="space-y-2">
               <h3 className="text-sm font-heading font-semibold">Waveform</h3>
               <VizToolbar
                 zoom={{ onIn: waveViz.zoomIn, onOut: waveViz.zoomOut, onReset: waveViz.reset, isZoomed: waveViz.isZoomed }}
-                cursorReadout={waveCursorReadout}
                 fullscreen={{ containerRef: waveContainerRef }}
                 download={{ canvasRef: waveViz.canvasRef, filename: `${fileName}-ir-waveform.png` }}
               />
-              <canvas
-                ref={waveViz.canvasRef}
-                width={800}
-                height={200}
-                className="w-full rounded-md border border-border"
-                style={{ cursor: 'crosshair' }}
-                {...waveViz.handlers}
-              />
+              <div style={{ position: 'relative' }}>
+                <canvas
+                  ref={waveViz.canvasRef}
+                  className="w-full rounded-md border border-border"
+                  style={{ cursor: 'crosshair', height: '200px' }}
+                  {...waveViz.handlers}
+                />
+              </div>
             </div>
 
             <div ref={freqContainerRef} className="space-y-2">
               <h3 className="text-sm font-heading font-semibold">Frequency Response</h3>
               <VizToolbar
                 zoom={{ onIn: freqViz.zoomIn, onOut: freqViz.zoomOut, onReset: freqViz.reset, isZoomed: freqViz.isZoomed }}
-                cursorReadout={freqCursorReadout}
                 fullscreen={{ containerRef: freqContainerRef }}
                 download={{ canvasRef: freqViz.canvasRef, filename: `${fileName}-ir-freq.png` }}
               />
-              <canvas
-                ref={freqViz.canvasRef}
-                width={800}
-                height={250}
-                className="w-full rounded-md border border-border"
-                style={{ cursor: 'crosshair' }}
-                {...freqViz.handlers}
-              />
+              <div style={{ position: 'relative' }}>
+                <canvas
+                  ref={freqViz.canvasRef}
+                  className="w-full rounded-md border border-border"
+                  style={{ cursor: 'crosshair', height: '250px' }}
+                  {...freqViz.handlers}
+                />
+              </div>
             </div>
 
             <p className="text-xs text-muted-foreground">File: {fileName}</p>

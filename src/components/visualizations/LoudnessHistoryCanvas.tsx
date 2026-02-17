@@ -1,13 +1,12 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, type RefObject } from 'react';
 import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface LoudnessHistoryCanvasProps {
   shortTerm: number[];
   momentary?: number[];
-  width?: number;
-  height?: number;
   viewport?: Viewport;
-  cursor?: CursorData | null;
+  cursorRef?: RefObject<CursorData | null>;
+  cursorLabel?: (dataX: number, dataY: number) => string;
   canvasHandlers?: Record<string, any>;
   canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
@@ -15,33 +14,56 @@ interface LoudnessHistoryCanvasProps {
 export function LoudnessHistoryCanvas({
   shortTerm,
   momentary,
-  width = 900,
-  height = 220,
   viewport,
-  cursor,
+  cursorRef,
+  cursorLabel,
   canvasHandlers,
   canvasRef: externalRef,
 }: LoudnessHistoryCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement>(null);
   const ref = externalRef || internalRef;
+  const sizeRef = useRef({ w: 0, h: 0 });
+  const rafRef = useRef<number>(0);
 
+  // ResizeObserver
+  useEffect(() => {
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
+    if (!canvas) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.round(entry.contentRect.width * dpr);
+        const h = Math.round(entry.contentRect.height * dpr);
+        if (w > 0 && h > 0 && (w !== sizeRef.current.w || h !== sizeRef.current.h)) {
+          sizeRef.current = { w, h };
+          canvas.width = w;
+          canvas.height = h;
+        }
+      }
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, [ref]);
+
+  // Main paint
   useEffect(() => {
     const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
     if (!canvas || !shortTerm.length) return;
 
-    canvas.width = width;
-    canvas.height = height;
+    const width = canvas.width;
+    const height = canvas.height;
+    if (width === 0 || height === 0) return;
     const ctx = canvas.getContext('2d')!;
     ctx.clearRect(0, 0, width, height);
 
-    const paddingLeft = 45;
-    const paddingRight = 10;
-    const paddingTop = 15;
-    const paddingBottom = 25;
+    const dpr = window.devicePixelRatio || 1;
+    const paddingLeft = Math.round(45 * dpr);
+    const paddingRight = Math.round(10 * dpr);
+    const paddingTop = Math.round(15 * dpr);
+    const paddingBottom = Math.round(25 * dpr);
     const plotW = width - paddingLeft - paddingRight;
     const plotH = height - paddingTop - paddingBottom;
 
-    // LUFS range from viewport Y
     const fullMinLufs = -60;
     const fullMaxLufs = 0;
     const lufsRange100 = fullMaxLufs - fullMinLufs;
@@ -49,13 +71,12 @@ export function LoudnessHistoryCanvas({
     const maxLufs = viewport ? fullMinLufs + viewport.yMax * lufsRange100 : fullMaxLufs;
     const range = maxLufs - minLufs;
 
-    // Time range from viewport X
     const totalSamples = shortTerm.length;
     const startIdx = viewport ? Math.floor(viewport.xMin * totalSamples) : 0;
     const endIdx = viewport ? Math.ceil(viewport.xMax * totalSamples) : totalSamples;
     const visibleCount = endIdx - startIdx;
 
-    const totalSeconds = shortTerm.length * 3; // 3s windows
+    const totalSeconds = shortTerm.length * 3;
     const viewStartTime = (startIdx / totalSamples) * totalSeconds;
     const viewEndTime = (endIdx / totalSamples) * totalSeconds;
 
@@ -64,14 +85,10 @@ export function LoudnessHistoryCanvas({
       return paddingTop + plotH * (1 - (clamped - minLufs) / range);
     };
 
-    const toX = (i: number) => {
-      return paddingLeft + ((i - startIdx) / (visibleCount - 1 || 1)) * plotW;
-    };
-
-    // Grid lines
+    const fontSize = Math.round(9 * dpr);
     ctx.strokeStyle = 'rgba(255,255,255,0.08)';
     ctx.fillStyle = 'rgba(255,255,255,0.4)';
-    ctx.font = '9px monospace';
+    ctx.font = `${fontSize}px monospace`;
     ctx.textAlign = 'right';
     ctx.lineWidth = 1;
 
@@ -85,18 +102,15 @@ export function LoudnessHistoryCanvas({
       ctx.fillText(`${db}`, paddingLeft - 4, y + 3);
     }
 
-    // Time axis
     ctx.textAlign = 'center';
     const timeSteps = Math.min(6, visibleCount);
     for (let i = 0; i <= timeSteps; i++) {
       const x = paddingLeft + (i / timeSteps) * plotW;
       const t = viewStartTime + (i / timeSteps) * (viewEndTime - viewStartTime);
-      ctx.fillText(`${t.toFixed(0)}s`, x, height - 5);
+      ctx.fillText(`${t.toFixed(0)}s`, x, height - Math.round(5 * dpr));
     }
 
-    // Draw momentary (background, lighter)
     if (momentary && momentary.length > 0) {
-      // Map momentary indices to visible range
       const mStart = Math.floor((startIdx / totalSamples) * momentary.length);
       const mEnd = Math.ceil((endIdx / totalSamples) * momentary.length);
       ctx.strokeStyle = 'hsla(40, 80%, 55%, 0.25)';
@@ -113,11 +127,9 @@ export function LoudnessHistoryCanvas({
       ctx.stroke();
     }
 
-    // Draw short-term (main line) - visible range only
     const visibleST = shortTerm.slice(startIdx, endIdx);
     const finite = visibleST.filter(isFinite);
     if (finite.length > 0) {
-      // Fill area under curve
       ctx.fillStyle = 'hsla(40, 95%, 55%, 0.1)';
       ctx.beginPath();
       let firstX = paddingLeft;
@@ -133,7 +145,6 @@ export function LoudnessHistoryCanvas({
       ctx.lineTo(firstX, paddingTop + plotH);
       ctx.fill();
 
-      // Line
       ctx.strokeStyle = 'hsl(40, 95%, 55%)';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -148,40 +159,99 @@ export function LoudnessHistoryCanvas({
       ctx.stroke();
     }
 
-    // Labels
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '10px sans-serif';
+    const labelFontSize = Math.round(10 * dpr);
+    ctx.font = `${labelFontSize}px sans-serif`;
     ctx.textAlign = 'left';
     ctx.fillText('LUFS', paddingLeft + 4, paddingTop + 12);
+  }, [shortTerm, momentary, viewport, ref, sizeRef.current.w, sizeRef.current.h]);
 
-    // Crosshair cursor
-    if (cursor) {
-      const cx = cursor.normX * width;
-      const cy = cursor.normY * height;
-      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.moveTo(cx, paddingTop);
-      ctx.lineTo(cx, paddingTop + plotH);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, cy);
-      ctx.lineTo(paddingLeft + plotW, cy);
-      ctx.stroke();
-      ctx.setLineDash([]);
+  // Crosshair overlay via rAF
+  useEffect(() => {
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
+    if (!canvas || !cursorRef) return;
+
+    let overlayCanvas = canvas.parentElement?.querySelector<HTMLCanvasElement>('.viz-cursor-overlay');
+    if (!overlayCanvas) {
+      overlayCanvas = document.createElement('canvas');
+      overlayCanvas.className = 'viz-cursor-overlay';
+      overlayCanvas.style.position = 'absolute';
+      overlayCanvas.style.inset = '0';
+      overlayCanvas.style.pointerEvents = 'none';
+      overlayCanvas.style.width = '100%';
+      overlayCanvas.style.height = '100%';
+      canvas.parentElement?.appendChild(overlayCanvas);
     }
-  }, [shortTerm, momentary, width, height, viewport, cursor, ref]);
+
+    let running = true;
+    const draw = () => {
+      if (!running) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      if (overlayCanvas!.width !== w || overlayCanvas!.height !== h) {
+        overlayCanvas!.width = w;
+        overlayCanvas!.height = h;
+      }
+      const ctx = overlayCanvas!.getContext('2d')!;
+      ctx.clearRect(0, 0, w, h);
+
+      const dpr = window.devicePixelRatio || 1;
+      const paddingLeft = Math.round(45 * dpr);
+      const paddingRight = Math.round(10 * dpr);
+      const paddingTop = Math.round(15 * dpr);
+      const paddingBottom = Math.round(25 * dpr);
+      const plotW = w - paddingLeft - paddingRight;
+      const plotH = h - paddingTop - paddingBottom;
+
+      const cursor = cursorRef.current;
+      if (cursor) {
+        const cx = cursor.normX * w;
+        const cy = cursor.normY * h;
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(cx, paddingTop);
+        ctx.lineTo(cx, paddingTop + plotH);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(paddingLeft, cy);
+        ctx.lineTo(paddingLeft + plotW, cy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (cursorLabel) {
+          const label = cursorLabel(cursor.dataX, cursor.dataY);
+          const fontSize = Math.round(11 * dpr);
+          ctx.font = `${fontSize}px monospace`;
+          const metrics = ctx.measureText(label);
+          const pad = 4 * dpr;
+          const textX = Math.min(cx + pad, w - metrics.width - pad);
+          const textY = Math.max(cy - pad, fontSize + pad);
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(textX - 2, textY - fontSize, metrics.width + 4, fontSize + 4);
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.fillText(label, textX, textY);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+    rafRef.current = requestAnimationFrame(draw);
+    return () => { running = false; cancelAnimationFrame(rafRef.current); overlayCanvas?.remove(); };
+  }, [ref, cursorRef, cursorLabel]);
 
   return (
-    <div className="space-y-1">
-      <h3 className="text-sm font-heading font-semibold">Loudness Over Time</h3>
-      <canvas
-        ref={ref as React.RefObject<HTMLCanvasElement>}
-        className="w-full rounded-md border border-border"
-        style={{ cursor: 'crosshair' }}
-        {...canvasHandlers}
-      />
+    <div style={{ position: 'relative' }}>
+      <div className="space-y-1">
+        <h3 className="text-sm font-heading font-semibold">Loudness Over Time</h3>
+        <canvas
+          ref={ref as React.RefObject<HTMLCanvasElement>}
+          className="w-full rounded-md border border-border"
+          style={{ cursor: 'crosshair', height: '220px' }}
+          {...canvasHandlers}
+        />
+      </div>
     </div>
   );
 }

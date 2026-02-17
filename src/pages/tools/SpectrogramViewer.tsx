@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -47,17 +47,16 @@ const SpectrogramViewer = () => {
 
   const isHiRes = headerInfo && headerInfo.sampleRate > 48000;
 
-  // Cursor readout
-  const cursorReadout = useMemo(() => {
-    if (!viz.cursor || !spectrogramData) return undefined;
+  // Cursor label drawn on canvas — no React state
+  const cursorLabel = useCallback((dataX: number, dataY: number) => {
+    if (!spectrogramData) return '';
     const totalDuration = spectrogramData.times[spectrogramData.times.length - 1] || 0;
     const nyquist = spectrogramData.sampleRate / 2;
-    const time = viz.cursor.dataX * totalDuration;
-    const freq = viz.cursor.dataY * nyquist;
+    const time = dataX * totalDuration;
+    const freq = dataY * nyquist;
     return `${time.toFixed(2)}s / ${formatFrequency(freq)}`;
-  }, [viz.cursor, spectrogramData]);
+  }, [spectrogramData]);
 
-  // Build toggles array
   const toggles = useMemo(() => {
     const t = [];
     if (bandwidthData) {
@@ -101,7 +100,6 @@ const SpectrogramViewer = () => {
           <div ref={containerRef} className="space-y-2">
             <VizToolbar
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
-              cursorReadout={cursorReadout}
               dbRange={{ min: minDb, max: maxDb, onMinChange: setMinDb, onMaxChange: setMaxDb }}
               colormap={{ value: colormap, onChange: (v) => setColormap(v as Colormap), options: COLORMAPS }}
               toggles={toggles}
@@ -116,7 +114,8 @@ const SpectrogramViewer = () => {
               ceilingHz={showCeiling ? bandwidthData?.frequencyCeiling : undefined}
               showCdNyquist={showCdNyquist && !!isHiRes}
               viewport={viz.viewport}
-              cursor={viz.cursor}
+              cursorRef={viz.cursorRef}
+              cursorLabel={cursorLabel}
               canvasHandlers={viz.handlers}
               canvasRef={viz.canvasRef}
             />
