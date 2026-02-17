@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useCallback, useRef } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -35,16 +35,16 @@ const FreqResponse = () => {
   const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const cursorReadout = useMemo(() => {
-    if (!viz.cursor || !spectrumData) return undefined;
+  const cursorLabel = useCallback((dataX: number, dataY: number) => {
+    if (!spectrumData) return '';
     const maxFreq = spectrumData.frequencies[spectrumData.frequencies.length - 1] || 22050;
     const minFreq = Math.max(20, spectrumData.frequencies[1] || 20);
     const logMin = Math.log10(minFreq);
     const logMax = Math.log10(maxFreq);
-    const freq = Math.pow(10, logMin + viz.cursor.dataX * (logMax - logMin));
-    const dbVal = -100 + (1 - viz.cursor.dataY) * 100;
+    const freq = Math.pow(10, logMin + dataX * (logMax - logMin));
+    const dbVal = -100 + (1 - dataY) * 100;
     return `${formatFrequency(freq)} / ${dbVal.toFixed(0)} dB`;
-  }, [viz.cursor, spectrumData]);
+  }, [spectrumData]);
 
   if (!fileName) {
     return (
@@ -57,11 +57,7 @@ const FreqResponse = () => {
   return (
     <ToolPage tool={tool}>
       <div className="space-y-4">
-        <FileInfoBar
-          fileName={fileName} fileSize={fileSize}
-          format={headerInfo?.format} duration={headerInfo?.duration}
-          sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth}
-        />
+        <FileInfoBar fileName={fileName} fileSize={fileSize} format={headerInfo?.format} duration={headerInfo?.duration} sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth} />
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!spectrumData && pcm && <ProgressBar value={50} label="Computing frequency response..." />}
         {spectrumData && (
@@ -72,16 +68,15 @@ const FreqResponse = () => {
             </p>
             <VizToolbar
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
-              cursorReadout={cursorReadout}
               fullscreen={{ containerRef }}
               download={{ canvasRef: viz.canvasRef, filename: `${fileName}-freq-response.png` }}
             />
             <SpectrumCanvas
               data={spectrumData as unknown as SpectrumData}
               showOctaveBands={false}
-              height={350}
               viewport={viz.viewport}
-              cursor={viz.cursor}
+              cursorRef={viz.cursorRef}
+              cursorLabel={cursorLabel}
               canvasHandlers={viz.handlers}
               canvasRef={viz.canvasRef}
             />

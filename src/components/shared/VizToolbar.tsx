@@ -14,7 +14,6 @@ export interface VizToggle {
 }
 
 export interface VizToolbarProps {
-  // Zoom controls
   zoom?: {
     onIn: () => void;
     onOut: () => void;
@@ -22,10 +21,6 @@ export interface VizToolbarProps {
     isZoomed: boolean;
   };
 
-  // Cursor readout
-  cursorReadout?: string;
-
-  // dB range
   dbRange?: {
     min: number;
     max: number;
@@ -35,22 +30,18 @@ export interface VizToolbarProps {
     maxBound?: number;
   };
 
-  // Colormap
   colormap?: {
     value: string;
     onChange: (v: string) => void;
     options: readonly string[];
   };
 
-  // Toggle switches
   toggles?: VizToggle[];
 
-  // Fullscreen
   fullscreen?: {
     containerRef: RefObject<HTMLElement | null>;
   };
 
-  // Download PNG
   download?: {
     canvasRef: RefObject<HTMLCanvasElement | null>;
     filename?: string;
@@ -59,7 +50,6 @@ export interface VizToolbarProps {
 
 export function VizToolbar({
   zoom,
-  cursorReadout,
   dbRange,
   colormap,
   toggles,
@@ -92,7 +82,6 @@ export function VizToolbar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
-      {/* Zoom buttons */}
       {zoom && (
         <div className="flex items-center gap-1">
           <Button variant="outline" size="icon" className="h-7 w-7" onClick={zoom.onIn} title="Zoom in (scroll wheel)">
@@ -109,14 +98,6 @@ export function VizToolbar({
         </div>
       )}
 
-      {/* Cursor readout */}
-      {cursorReadout && (
-        <span className="font-mono text-xs text-muted-foreground bg-secondary/50 px-2 py-0.5 rounded">
-          {cursorReadout}
-        </span>
-      )}
-
-      {/* dB range */}
       {dbRange && (
         <>
           <div className="flex items-center gap-1.5">
@@ -146,7 +127,6 @@ export function VizToolbar({
         </>
       )}
 
-      {/* Colormap */}
       {colormap && (
         <div className="flex items-center gap-1.5">
           <label className="text-xs font-medium">Colormap</label>
@@ -161,7 +141,6 @@ export function VizToolbar({
         </div>
       )}
 
-      {/* Toggles */}
       {toggles?.map((t) => (
         <div key={t.id} className="flex items-center gap-1.5">
           <Switch checked={t.checked} onCheckedChange={t.onChange} id={t.id} className="scale-75" />
@@ -169,17 +148,14 @@ export function VizToolbar({
         </div>
       ))}
 
-      {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Fullscreen */}
       {fullscreen && (
         <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleFullscreen} title="Fullscreen">
           <Maximize2 className="h-3.5 w-3.5" />
         </Button>
       )}
 
-      {/* Download */}
       {download && (
         <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download PNG">
           <Download className="h-3.5 w-3.5" />

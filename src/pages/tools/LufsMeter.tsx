@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -45,14 +45,13 @@ const LufsMeter = () => {
   const viz = useVizViewport({ maxZoomX: 32, maxZoomY: 8 });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Cursor readout
-  const cursorReadout = useMemo(() => {
-    if (!viz.cursor || !lufs) return undefined;
+  const cursorLabel = useCallback((dataX: number, dataY: number) => {
+    if (!lufs) return '';
     const totalSeconds = lufs.shortTerm.length * 3;
-    const time = viz.cursor.dataX * totalSeconds;
-    const lufsVal = -60 + (1 - viz.cursor.dataY) * 60;
+    const time = dataX * totalSeconds;
+    const lufsVal = -60 + (1 - dataY) * 60;
     return `${time.toFixed(1)}s / ${lufsVal.toFixed(1)} LUFS`;
-  }, [viz.cursor, lufs]);
+  }, [lufs]);
 
   return (
     <ToolPage tool={tool}>
@@ -72,43 +71,17 @@ const LufsMeter = () => {
           {lufs && (
             <>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                <MetricCard
-                  label="Integrated LUFS"
-                  value={isFinite(lufs.integrated) ? `${lufs.integrated.toFixed(1)}` : '—'}
-                  subtext="Overall loudness"
-                  status={lufs.integrated > -10 ? 'warn' : lufs.integrated < -20 ? 'info' : 'pass'}
-                />
-                <MetricCard
-                  label="Sample Peak"
-                  value={isFinite(lufs.truePeak) ? `${lufs.truePeak.toFixed(1)} dBFS` : '—'}
-                  subtext="Per-sample max (not true peak)"
-                  status={lufs.truePeak > -1 ? 'fail' : 'pass'}
-                />
-                <MetricCard
-                  label="LRA"
-                  value={`${lufs.lra.toFixed(1)} LU`}
-                  subtext="Loudness Range"
-                  status="info"
-                />
-                <MetricCard
-                  label="Short-Term Max"
-                  value={lufs.shortTerm.length > 0 ? `${Math.max(...lufs.shortTerm.filter(isFinite)).toFixed(1)}` : '—'}
-                  subtext="LUFS (3s window)"
-                  status="neutral"
-                />
-                <MetricCard
-                  label="Momentary Max"
-                  value={momentaryMax !== null && isFinite(momentaryMax) ? `${momentaryMax.toFixed(1)}` : '—'}
-                  subtext="LUFS (400ms window)"
-                  status="neutral"
-                />
+                <MetricCard label="Integrated LUFS" value={isFinite(lufs.integrated) ? `${lufs.integrated.toFixed(1)}` : '—'} subtext="Overall loudness" status={lufs.integrated > -10 ? 'warn' : lufs.integrated < -20 ? 'info' : 'pass'} />
+                <MetricCard label="Sample Peak" value={isFinite(lufs.truePeak) ? `${lufs.truePeak.toFixed(1)} dBFS` : '—'} subtext="Per-sample max (not true peak)" status={lufs.truePeak > -1 ? 'fail' : 'pass'} />
+                <MetricCard label="LRA" value={`${lufs.lra.toFixed(1)} LU`} subtext="Loudness Range" status="info" />
+                <MetricCard label="Short-Term Max" value={lufs.shortTerm.length > 0 ? `${Math.max(...lufs.shortTerm.filter(isFinite)).toFixed(1)}` : '—'} subtext="LUFS (3s window)" status="neutral" />
+                <MetricCard label="Momentary Max" value={momentaryMax !== null && isFinite(momentaryMax) ? `${momentaryMax.toFixed(1)}` : '—'} subtext="LUFS (400ms window)" status="neutral" />
               </div>
 
               {lufs.shortTerm.length > 1 && (
                 <div ref={containerRef} className="space-y-2">
                   <VizToolbar
                     zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
-                    cursorReadout={cursorReadout}
                     fullscreen={{ containerRef }}
                     download={{ canvasRef: viz.canvasRef, filename: `${fileName}-loudness.png` }}
                   />
@@ -116,7 +89,8 @@ const LufsMeter = () => {
                     shortTerm={lufs.shortTerm}
                     momentary={lufs.momentary}
                     viewport={viz.viewport}
-                    cursor={viz.cursor}
+                    cursorRef={viz.cursorRef}
+                    cursorLabel={cursorLabel}
                     canvasHandlers={viz.handlers}
                     canvasRef={viz.canvasRef}
                   />
