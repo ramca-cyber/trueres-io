@@ -3,6 +3,7 @@ import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX, Gauge } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { register, unregister } from '@/lib/playback-manager';
 
 interface AudioPlayerProps {
   src: File | Blob;
@@ -93,9 +94,12 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       onAnalyserReady?.(analyser);
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Close AudioContext only on unmount
+    // Register with playback manager & close AudioContext on unmount
     useEffect(() => {
+      const el = innerRef.current;
+      if (el) register(el);
       return () => {
+        if (el) unregister(el);
         ctxRef.current?.close().catch(() => {});
       };
     }, []);

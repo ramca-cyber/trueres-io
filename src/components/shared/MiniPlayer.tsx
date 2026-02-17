@@ -6,6 +6,7 @@ import { Play, Pause, X, SkipForward, SkipBack, Maximize2, Music, Film, Volume2,
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
+import { register, unregister } from '@/lib/playback-manager';
 
 export function MiniPlayer() {
   const { active, queue, currentIndex, isPlaying, currentTime, duration, deactivate, setPlaying, setCurrentIndex, setTime } = useMiniPlayerStore();
@@ -20,6 +21,12 @@ export function MiniPlayer() {
   const [seekValue, setSeekValue] = useState(0);
 
   const current = queue[currentIndex];
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (el) register(el);
+    return () => { if (el) unregister(el); };
+  }, []);
 
   useEffect(() => {
     if (!current?.playbackSrc) { setUrl(''); return; }
