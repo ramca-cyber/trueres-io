@@ -7,7 +7,7 @@ import { InteractiveWaveform } from '@/components/shared/InteractiveWaveform';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useAudioPreview } from '@/hooks/use-audio-preview';
 import { trimArgs } from '@/engines/processing/presets';
@@ -21,7 +21,7 @@ const AudioTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(30);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, duration, isPlaying, currentTime, decoding, playRegion, stop, seekTo } = useAudioPreview(file);
 
   // Auto-set end time to file duration when decoded
@@ -74,6 +74,7 @@ const AudioTrimmer = () => {
                 onEndChange={setEndTime}
                 currentTime={currentTime}
                 onSeek={seekTo}
+                onTogglePlay={handlePreview}
               />
 
               <div className="grid grid-cols-2 gap-4">
@@ -103,8 +104,18 @@ const AudioTrimmer = () => {
 
           {!audioBuffer && !decoding && <AudioPlayer src={file} label="Input" />}
 
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Trimming..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleTrim(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 flex-wrap">
             {audioBuffer && (
@@ -122,7 +133,10 @@ const AudioTrimmer = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Trim complete!</p>
+              <p className="text-sm text-muted-foreground">
+                Trim complete! {formatFileSize(outputBlob.size)}
+                {file && outputBlob.size < file.size && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% smaller)`}
+              </p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_trimmed.${ext}`} label="Download trimmed file" />
             </div>

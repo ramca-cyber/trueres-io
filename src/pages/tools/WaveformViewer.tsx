@@ -119,9 +119,9 @@ const WaveformViewer = () => {
           </>
         )}
 
-        <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+        <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
           Analyze another file
-        </button>
+        </Button>
       </div>
     </ToolPage>
   );

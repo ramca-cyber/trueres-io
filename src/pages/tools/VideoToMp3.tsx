@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { VIDEO_ACCEPT } from '@/config/constants';
+import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { videoToMp3Args, MP3_BITRATES } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const tool = getToolById('video-to-mp3')!;
 const VideoToMp3 = () => {
   const [file, setFile] = useState<File | null>(null);
   const [bitrate, setBitrate] = useState(320);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -50,8 +50,18 @@ const VideoToMp3 = () => {
               </SelectContent>
             </Select>
           </div>
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Extracting audio..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleExtract(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
           <div className="flex gap-3">
             <Button onClick={handleExtract} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -61,7 +71,10 @@ const VideoToMp3 = () => {
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Audio extracted successfully!</p>
+              <p className="text-sm text-muted-foreground">
+                Audio extracted! {formatFileSize(outputBlob.size)}
+                {file && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% of original)`}
+              </p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}.mp3`} label="Download MP3" />
             </div>

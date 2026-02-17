@@ -20,7 +20,7 @@ export const AudioPlayer = ({ src, label, className }: AudioPlayerProps) => {
       {label && (
         <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
       )}
-      <audio controls preload="metadata" src={url} className="w-full" />
+      <audio controls preload="metadata" src={url} className="w-full [color-scheme:dark]" />
     </div>
   );
 };

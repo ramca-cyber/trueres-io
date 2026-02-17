@@ -5,7 +5,7 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { VIDEO_ACCEPT } from '@/config/constants';
+import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { videoToGifArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ const VideoToGif = () => {
   const [file, setFile] = useState<File | null>(null);
   const [fps, setFps] = useState(10);
   const [width, setWidth] = useState('480');
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -50,8 +50,18 @@ const VideoToGif = () => {
               <Input type="number" min="100" max="1920" step="10" value={width} onChange={(e) => setWidth(e.target.value)} />
             </div>
           </div>
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Creating GIF..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleConvert(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
           <div className="flex gap-3">
             <Button onClick={handleConvert} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -61,7 +71,7 @@ const VideoToGif = () => {
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">GIF created! ({(outputBlob.size / 1024 / 1024).toFixed(1)} MB)</p>
+              <p className="text-sm text-muted-foreground">GIF created! {formatFileSize(outputBlob.size)}</p>
               <DownloadButton blob={outputBlob} filename={`${baseName}.gif`} label="Download GIF" />
             </div>
           )}

@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { stripMetadataArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ const tool = getToolById('metadata-stripper')!;
 
 const MetadataStripper = () => {
   const [file, setFile] = useState<File | null>(null);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -52,8 +52,18 @@ const MetadataStripper = () => {
             </div>
           </div>
 
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Stripping metadata..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleStrip(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <Button onClick={handleStrip} disabled={processing || loading}>
@@ -65,7 +75,10 @@ const MetadataStripper = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">All metadata removed successfully!</p>
+              <p className="text-sm text-muted-foreground">
+                All metadata removed! {formatFileSize(outputBlob.size)}
+                {file && outputBlob.size < file.size && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% smaller)`}
+              </p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_clean.${ext}`} label="Download clean file" />
             </div>

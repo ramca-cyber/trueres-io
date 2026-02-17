@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { SAMPLE_RATES } from '@/config/constants';
+import { SAMPLE_RATES, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { resampleArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ const tool = getToolById('sample-rate-converter')!;
 const SampleRateConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [targetRate, setTargetRate] = useState('48000');
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -55,8 +55,18 @@ const SampleRateConverter = () => {
             </Select>
           </div>
 
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Resampling..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleResample(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <Button onClick={handleResample} disabled={processing || loading}>
@@ -68,7 +78,7 @@ const SampleRateConverter = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Resampled to {(parseInt(targetRate) / 1000).toFixed(1)} kHz</p>
+              <p className="text-sm text-muted-foreground">Resampled to {(parseInt(targetRate) / 1000).toFixed(1)} kHz — {formatFileSize(outputBlob.size)}</p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_${(parseInt(targetRate) / 1000).toFixed(1)}kHz.${ext}`} label="Download resampled file" />
             </div>
