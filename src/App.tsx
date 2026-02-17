@@ -52,6 +52,18 @@ const BitrateCalculator = lazy(() => import("./pages/tools/BitrateCalculator"));
 const FormatReference = lazy(() => import("./pages/tools/FormatReference"));
 const BluetoothCodecs = lazy(() => import("./pages/tools/BluetoothCodecs"));
 const MediaPlayer = lazy(() => import("./pages/tools/MediaPlayer"));
+const SpeakerTest = lazy(() => import("./pages/tools/SpeakerTest"));
+const SubwooferTest = lazy(() => import("./pages/tools/SubwooferTest"));
+const BurnInGenerator = lazy(() => import("./pages/tools/BurnInGenerator"));
+const TurntableTest = lazy(() => import("./pages/tools/TurntableTest"));
+const SurroundReference = lazy(() => import("./pages/tools/SurroundReference"));
+const DbConverter = lazy(() => import("./pages/tools/DbConverter"));
+const ListeningMonitor = lazy(() => import("./pages/tools/ListeningMonitor"));
+const ABXTest = lazy(() => import("./pages/tools/ABXTest"));
+const ClippingDetector = lazy(() => import("./pages/tools/ClippingDetector"));
+const RoomAnalyzer = lazy(() => import("./pages/tools/RoomAnalyzer"));
+const IRViewer = lazy(() => import("./pages/tools/IRViewer"));
+const BitPerfectTest = lazy(() => import("./pages/tools/BitPerfectTest"));
 
 const queryClient = new QueryClient();
 
@@ -126,6 +138,20 @@ const App = () => (
                 <Route path="/format-reference" element={<FormatReference />} />
                 <Route path="/bluetooth-codecs" element={<BluetoothCodecs />} />
                 <Route path="/media-player" element={<MediaPlayer />} />
+
+                {/* Home Theater & Audiophile */}
+                <Route path="/speaker-test" element={<SpeakerTest />} />
+                <Route path="/subwoofer-test" element={<SubwooferTest />} />
+                <Route path="/burn-in-generator" element={<BurnInGenerator />} />
+                <Route path="/turntable-test" element={<TurntableTest />} />
+                <Route path="/surround-reference" element={<SurroundReference />} />
+                <Route path="/db-converter" element={<DbConverter />} />
+                <Route path="/listening-monitor" element={<ListeningMonitor />} />
+                <Route path="/abx-test" element={<ABXTest />} />
+                <Route path="/clipping-detector" element={<ClippingDetector />} />
+                <Route path="/room-analyzer" element={<RoomAnalyzer />} />
+                <Route path="/ir-viewer" element={<IRViewer />} />
+                <Route path="/bit-perfect-test" element={<BitPerfectTest />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

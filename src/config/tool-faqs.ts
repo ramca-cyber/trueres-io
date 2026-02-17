@@ -56,6 +56,54 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
     { q: 'Is my file uploaded anywhere?', a: 'No. Your file stays on your device. The player uses a local object URL — nothing is sent to any server.' },
     { q: 'Why can\'t I play MKV or AVI files?', a: 'Some containers (MKV, AVI) may not be natively supported by all browsers. Chrome generally has the widest format support. Try converting with the Video Converter tool.' },
   ],
+  'speaker-test': [
+    { q: 'Does surround sound work in a browser?', a: 'Yes, if your system audio output is configured for multichannel (5.1/7.1). Chrome and Edge have the best support. The tool uses ChannelMergerNode to route to individual channels.' },
+    { q: 'Why do I only hear stereo?', a: 'Your operating system or audio device may be set to stereo output. Check your sound settings and ensure your receiver/DAC is configured for surround.' },
+  ],
+  'subwoofer-test': [
+    { q: 'Why can\'t I hear the 10 Hz tone?', a: 'Most subwoofers roll off below 20 Hz, and human hearing typically starts around 20 Hz. You may feel the vibration rather than hear it.' },
+    { q: 'What is a crossover frequency?', a: 'The crossover frequency is where your subwoofer stops reproducing sound and your main speakers take over. Common settings are 60-120 Hz depending on speaker size.' },
+  ],
+  'burn-in-generator': [
+    { q: 'Does headphone burn-in actually work?', a: 'Scientific evidence is inconclusive. Most controlled studies show no measurable difference. However, some users report perceived improvements. This tool is provided for experimentation.' },
+    { q: 'What volume should I use?', a: 'Use a moderate volume — approximately your normal listening level. Excessive volume during burn-in can damage drivers.' },
+  ],
+  'turntable-test': [
+    { q: 'How do I use the wow & flutter test?', a: 'Play the 3150 Hz tone through your turntable and listen for pitch wobble. A stable tone indicates good speed stability. Use a frequency counter app for precise measurement.' },
+    { q: 'What is anti-skating?', a: 'Anti-skating is a force applied to the tonearm to counteract the natural inward pull of the spinning record. The left-channel-only test tone helps verify correct adjustment.' },
+  ],
+  'surround-reference': [
+    { q: 'What is Dolby Atmos?', a: 'Dolby Atmos is an object-based audio format that adds height channels to traditional surround sound. It supports up to 7.1.4 configurations with four overhead speakers.' },
+    { q: 'What speaker layout should I choose?', a: 'Start with 5.1 for most rooms. Add side/rear surrounds for 7.1 if your room supports it. Atmos (7.1.4) adds ceiling speakers for the most immersive experience.' },
+  ],
+  'db-converter': [
+    { q: 'What is the difference between dBu and dBV?', a: 'dBu references 0.775V (the voltage across 600Ω that produces 1mW). dBV references 1V. Professional audio uses dBu (+4 dBu standard), consumer audio uses dBV (-10 dBV standard).' },
+    { q: 'What is dBFS?', a: 'dBFS (decibels relative to Full Scale) is used in digital audio. 0 dBFS is the maximum level before clipping. All values are negative, with typical targets around -14 to -23 dBFS.' },
+  ],
+  'listening-monitor': [
+    { q: 'How long can I safely listen?', a: 'At 85 dB SPL, WHO recommends a maximum of 8 hours. For every 3 dB increase, safe time halves. At 100 dB, the safe limit is only 15 minutes.' },
+    { q: 'How do I know my actual SPL level?', a: 'Use a dedicated SPL meter or a calibrated smartphone app. This tool provides estimates based on the level you set — actual SPL depends on your equipment and volume setting.' },
+  ],
+  'abx-test': [
+    { q: 'What is an ABX test?', a: 'An ABX test is a double-blind methodology where you compare two audio samples (A and B) with an unknown sample (X). X is randomly assigned as A or B, and you must identify which one it is.' },
+    { q: 'How many trials do I need?', a: 'At least 10-16 trials are recommended for statistical significance. With 12 correct out of 16, you achieve p < 0.05, indicating a statistically significant ability to distinguish.' },
+  ],
+  'clipping-detector': [
+    { q: 'What is inter-sample peaking?', a: 'Inter-sample peaks (ISP) occur when reconstructed analog signals between digital samples exceed 0 dBFS. This happens even when no individual sample clips, and can cause distortion in DACs.' },
+    { q: 'How many clipped samples is too many?', a: 'Even a single clipped sample can be audible depending on context. A few isolated clips may be acceptable, but consecutive clipped samples indicate serious mastering issues.' },
+  ],
+  'room-analyzer': [
+    { q: 'Do I need a calibrated microphone?', a: 'For casual use, your laptop or phone mic works fine to spot room modes and major issues. For accurate measurements, a calibrated measurement microphone (e.g., UMIK-1) is recommended.' },
+    { q: 'What is RT60?', a: 'RT60 is the time it takes for sound to decay by 60 dB after the source stops. Typical values: studios 0.2-0.4s, living rooms 0.4-0.8s, concert halls 1.5-2.5s.' },
+  ],
+  'ir-viewer': [
+    { q: 'What is an impulse response file?', a: 'An IR file captures how a space or device responds to a short burst of sound. It encodes the reverb characteristics and frequency response, used for convolution reverb and room correction.' },
+    { q: 'What file formats work?', a: 'WAV is the most common IR format. FLAC and AIFF are also supported. Most IR files are mono or stereo, typically at 44.1 or 48 kHz.' },
+  ],
+  'bit-perfect-test': [
+    { q: 'What is bit-perfect playback?', a: 'Bit-perfect playback means the digital audio signal reaches your DAC without any modification — no volume adjustment, sample rate conversion, or DSP processing by the OS or driver.' },
+    { q: 'How do I achieve bit-perfect output?', a: 'On Windows, use WASAPI Exclusive mode. On macOS, set Audio MIDI Setup to match the file\'s sample rate. On Linux, use ALSA direct output. Disable all system sound effects.' },
+  ],
 };
 
 /**

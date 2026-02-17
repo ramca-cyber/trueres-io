@@ -45,4 +45,17 @@
   <url><loc>https://trueres.io/bluetooth-codecs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <!-- Media Player -->
   <url><loc>https://trueres.io/media-player</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <!-- Home Theater & Audiophile -->
+  <url><loc>https://trueres.io/speaker-test</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/subwoofer-test</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/burn-in-generator</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/turntable-test</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/surround-reference</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/db-converter</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/listening-monitor</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/abx-test</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/clipping-detector</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/room-analyzer</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/ir-viewer</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/bit-perfect-test</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
 </urlset>
