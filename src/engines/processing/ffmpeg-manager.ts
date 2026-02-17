@@ -4,8 +4,8 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
 
-const CORE_VERSION = '0.12.6';
-const CDN_BASE = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`;
+const CORE_VERSION = '0.12.10';
+const CDN_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`;
 const CORE_URL = `${CDN_BASE}/ffmpeg-core.js`;
 const WASM_URL = `${CDN_BASE}/ffmpeg-core.wasm`;
 
