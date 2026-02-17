@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://trueres.io/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://trueres.io/tools</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://trueres.io/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <!-- Audio Analysis & Forensics -->
+  <url><loc>https://trueres.io/hires-verifier</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/spectrogram</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/lufs-meter</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/dynamic-range</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/waveform-viewer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/stereo-analyzer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/file-inspector</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/lossy-detector</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/spectrum-analyzer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/audio-compare</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/batch-analyzer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/freq-response</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- Audio Processing -->
+  <url><loc>https://trueres.io/audio-converter</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/audio-trimmer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/audio-normalizer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/waveform-image</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/tag-editor</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/metadata-stripper</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/sample-rate-converter</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/channel-ops</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- Video Processing -->
+  <url><loc>https://trueres.io/video-to-mp3</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://trueres.io/video-trimmer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/video-compressor</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/video-to-gif</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/video-converter</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/video-mute</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/video-to-audio</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <!-- Signal Generators -->
+  <url><loc>https://trueres.io/tone-generator</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/sweep-generator</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/noise-generator</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/hearing-test</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/dac-test</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- Reference -->
+  <url><loc>https://trueres.io/bitrate-calculator</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/format-reference</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/bluetooth-codecs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+</urlset>
