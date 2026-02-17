@@ -47,10 +47,10 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       return () => URL.revokeObjectURL(objectUrl);
     }, [src]);
 
-    // Initialize Web Audio graph
+    // Initialize Web Audio graph — only once per <audio> element mount
     useEffect(() => {
       const el = innerRef.current;
-      if (!el || ctxRef.current) return;
+      if (!el || sourceRef.current) return; // already connected
 
       const ctx = new AudioContext();
       const source = ctx.createMediaElementSource(el);
@@ -91,18 +91,14 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       analyserRef.current = analyser;
 
       onAnalyserReady?.(analyser);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Close AudioContext only on unmount
+    useEffect(() => {
       return () => {
-        ctx.close().catch(() => {});
-        ctxRef.current = null;
-        sourceRef.current = null;
-        gainRef.current = null;
-        bassRef.current = null;
-        midRef.current = null;
-        trebleRef.current = null;
-        analyserRef.current = null;
+        ctxRef.current?.close().catch(() => {});
       };
-    }, [url]);
+    }, []);
 
     useEffect(() => {
       if (gainRef.current) gainRef.current.gain.value = muted ? 0 : volume;
