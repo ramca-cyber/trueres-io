@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
@@ -20,12 +20,20 @@ const HearingTest = () => {
   const oscRef = useRef<OscillatorNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
 
+  // Cleanup AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      try { oscRef.current?.stop(); } catch {}
+      audioCtxRef.current?.close();
+    };
+  }, []);
+
   const playTone = useCallback((freq: number, vol: number) => {
     const ctx = audioCtxRef.current || new AudioContext();
     audioCtxRef.current = ctx;
 
     // Stop previous
-    oscRef.current?.stop();
+    try { oscRef.current?.stop(); } catch {}
 
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -41,7 +49,7 @@ const HearingTest = () => {
   }, []);
 
   const stopTone = useCallback(() => {
-    oscRef.current?.stop();
+    try { oscRef.current?.stop(); } catch {}
     oscRef.current = null;
     setPlaying(false);
   }, []);

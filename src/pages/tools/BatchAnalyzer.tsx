@@ -78,11 +78,11 @@ const BatchAnalyzer = () => {
       {results.length === 0 && !processing ? (
         <FileDropZone
           accept={AUDIO_ACCEPT}
-          onFileSelect={() => {}}
+          onFileSelect={(f) => handleFiles([f])}
           multiple
           onMultipleFiles={handleFiles}
           label="Drop album files here"
-          sublabel="Drop multiple audio files for batch analysis"
+          sublabel="Drop one or more audio files for batch analysis"
         />
       ) : (
         <div className="space-y-4">

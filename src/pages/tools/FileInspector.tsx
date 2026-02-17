@@ -4,6 +4,7 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { getToolById } from '@/config/tool-registry';
 import { ALL_MEDIA_ACCEPT, FORMAT_NAMES, formatFileSize, formatDuration } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
+import { useAudioStore } from '@/stores/audio-store';
 
 const tool = getToolById('file-inspector')!;
 
@@ -87,7 +88,7 @@ const FileInspector = () => {
             </details>
           )}
 
-          <button onClick={() => window.location.reload()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
             Inspect another file
           </button>
         </div>

@@ -1,8 +1,7 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
-import { MetricCard } from '@/components/display/MetricCard';
 import { Play, Square, CheckCircle } from 'lucide-react';
 
 const tool = getToolById('dac-test')!;
@@ -19,13 +18,23 @@ const DacTest = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | OscillatorNode | null>(null);
 
+  // Cleanup AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      try { sourceRef.current?.stop(); } catch { }
+      audioCtxRef.current?.close();
+    };
+  }, []);
+
   const getCtx = useCallback(() => {
-    if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+    if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+      audioCtxRef.current = new AudioContext();
+    }
     return audioCtxRef.current;
   }, []);
 
   const stop = useCallback(() => {
-    try { sourceRef.current?.stop(); } catch {}
+    try { sourceRef.current?.stop(); } catch { }
     sourceRef.current = null;
     setRunning(null);
   }, []);
@@ -40,7 +49,6 @@ const DacTest = () => {
     const left = buf.getChannelData(0);
     const right = buf.getChannelData(1);
 
-    // Left channel first, then right
     for (let i = 0; i < sr * duration; i++) {
       left[i] = 0.5 * Math.sin(2 * Math.PI * 440 * i / sr);
     }
@@ -69,7 +77,6 @@ const DacTest = () => {
     const left = buf.getChannelData(0);
     const right = buf.getChannelData(1);
 
-    // In-phase: both channels same signal
     for (let i = 0; i < sr * duration; i++) {
       const val = 0.5 * Math.sin(2 * Math.PI * 200 * i / sr);
       left[i] = val;
@@ -96,7 +103,6 @@ const DacTest = () => {
     const buf = ctx.createBuffer(1, sr * duration, sr);
     const data = buf.getChannelData(0);
 
-    // Very quiet sine wave near the noise floor (-80dBFS)
     const amp = Math.pow(10, -80 / 20);
     for (let i = 0; i < sr * duration; i++) {
       data[i] = amp * Math.sin(2 * Math.PI * 1000 * i / sr);
@@ -122,7 +128,6 @@ const DacTest = () => {
     const buf = ctx.createBuffer(1, sr * duration, sr);
     const data = buf.getChannelData(0);
 
-    // Fade from -60dB to 0dB
     for (let i = 0; i < sr * duration; i++) {
       const t = i / (sr * duration);
       const db = -60 + t * 60;

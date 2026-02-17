@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,14 @@ const ToneGenerator = () => {
 
   const amplitude = Math.pow(10, level[0] / 20);
 
+  // Cleanup AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      oscRef.current?.stop();
+      audioCtxRef.current?.close();
+    };
+  }, []);
+
   const startPlayback = useCallback(() => {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
@@ -43,6 +51,8 @@ const ToneGenerator = () => {
   const stopPlayback = useCallback(() => {
     oscRef.current?.stop();
     audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    oscRef.current = null;
     setPlaying(false);
   }, []);
 

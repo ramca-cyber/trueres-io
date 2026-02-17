@@ -55,8 +55,8 @@ export function getCompatWarnings(caps: BrowserCapabilities): CompatWarning[] {
   if (!caps.sharedArrayBuffer) {
     warnings.push({
       feature: 'SharedArrayBuffer',
-      message: 'SharedArrayBuffer is not available. Some processing tools may be slower or unavailable. Try Chrome or Firefox for full support.',
-      severity: 'warning',
+      message: 'SharedArrayBuffer is not available. Processing tools will still work but may be slower (single-threaded mode). Try Chrome or Firefox for best performance.',
+      severity: 'info',
       affectedTools: ['audio-converter', 'video-to-mp3', 'video-compressor'],
     });
   }

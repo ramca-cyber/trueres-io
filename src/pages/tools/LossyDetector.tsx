@@ -9,6 +9,7 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFrequency } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
+import { useAudioStore } from '@/stores/audio-store';
 import { type LossyDetectResult, type BandwidthResult, type SpectrogramData } from '@/types/analysis';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 
@@ -55,7 +56,6 @@ const LossyDetector = () => {
 
         {lossyResult && (
           <>
-            {/* Verdict banner */}
             <div className={`rounded-lg p-4 flex items-start gap-3 ${
               lossyResult.isLossy
                 ? 'bg-destructive/10 border border-destructive/30'
@@ -105,6 +105,10 @@ const LossyDetector = () => {
             <SpectrogramCanvas data={spectrogramData as unknown as SpectrogramData} />
           </div>
         )}
+
+        <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          Analyze another file
+        </button>
       </div>
     </ToolPage>
   );

@@ -3,7 +3,7 @@ import { useAudioStore } from '@/stores/audio-store';
 import { parseHeader } from '@/engines/analysis/decoders/decoder-manager';
 import { decodeAudio } from '@/engines/analysis/decoders/decoder-manager';
 import { parseId3 } from '@/engines/analysis/parsers/id3-parser';
-import { parseFlacVorbisComments } from '@/engines/analysis/parsers/vorbis-comment-parser';
+import { parseFlacVorbisComments, parseOggVorbisComments } from '@/engines/analysis/parsers/vorbis-comment-parser';
 
 /**
  * Hook for loading and decoding audio files
@@ -29,6 +29,9 @@ export function useAudioFile() {
         store.setMetadata(meta);
       } else if (headerInfo.format === 'flac') {
         const meta = parseFlacVorbisComments(buffer);
+        store.setMetadata(meta);
+      } else if (headerInfo.format === 'ogg') {
+        const meta = parseOggVorbisComments(buffer);
         store.setMetadata(meta);
       }
     } catch (e) {

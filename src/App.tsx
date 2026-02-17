@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { Suspense, lazy } from "react";
 import { AppShell } from "@/components/layout/AppShell";
+import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
+import { Skeleton } from "@/components/ui/skeleton";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -53,8 +55,13 @@ const BluetoothCodecs = lazy(() => import("./pages/tools/BluetoothCodecs"));
 const queryClient = new QueryClient();
 
 const Loading = () => (
-  <div className="flex items-center justify-center py-16">
-    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+  <div className="container max-w-4xl py-6 space-y-6">
+    <div className="space-y-2">
+      <Skeleton className="h-8 w-64" />
+      <Skeleton className="h-4 w-96" />
+      <Skeleton className="h-3 w-48" />
+    </div>
+    <Skeleton className="h-48 w-full rounded-lg" />
   </div>
 );
 
@@ -67,6 +74,7 @@ const App = () => (
         <BrowserRouter>
           <AppShell>
             <Suspense fallback={<Loading />}>
+              <ErrorBoundary>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/tools" element={<AllTools />} />
@@ -119,6 +127,7 @@ const App = () => (
 
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </ErrorBoundary>
             </Suspense>
           </AppShell>
         </BrowserRouter>

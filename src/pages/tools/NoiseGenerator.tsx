@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,14 @@ const NoiseGenerator = () => {
 
   const amplitude = Math.pow(10, level[0] / 20);
 
+  // Cleanup AudioContext on unmount
+  useEffect(() => {
+    return () => {
+      try { sourceRef.current?.stop(); } catch {}
+      audioCtxRef.current?.close();
+    };
+  }, []);
+
   const startPlayback = useCallback(() => {
     const ctx = new AudioContext();
     const sr = ctx.sampleRate;
@@ -42,8 +50,10 @@ const NoiseGenerator = () => {
   }, [noiseType, amplitude]);
 
   const stopPlayback = useCallback(() => {
-    sourceRef.current?.stop();
+    try { sourceRef.current?.stop(); } catch {}
     audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    sourceRef.current = null;
     setPlaying(false);
   }, []);
 

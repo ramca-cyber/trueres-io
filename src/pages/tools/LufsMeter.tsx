@@ -9,6 +9,7 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
+import { useAudioStore } from '@/stores/audio-store';
 import { type LUFSResult } from '@/types/analysis';
 
 const tool = getToolById('lufs-meter')!;
@@ -76,7 +77,7 @@ const LufsMeter = () => {
             </>
           )}
 
-          <button onClick={() => window.location.reload()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
             Analyze another file
           </button>
         </div>
