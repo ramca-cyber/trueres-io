@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Disc3, User, Music2 } from 'lucide-react';
 import { parseId3 } from '@/engines/analysis/parsers/id3-parser';
 import { parseFlacVorbisComments, parseOggVorbisComments } from '@/engines/analysis/parsers/vorbis-comment-parser';
@@ -38,20 +38,33 @@ async function extractMetadata(file: File): Promise<AudioMetadata | null> {
 export function MetadataDisplay({ file, className, compact = false }: MetadataDisplayProps) {
   const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const coverUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    // Revoke previous cover URL
+    if (coverUrlRef.current) {
+      URL.revokeObjectURL(coverUrlRef.current);
+      coverUrlRef.current = null;
+      setCoverUrl(null);
+    }
+    setMetadata(null);
+
     extractMetadata(file).then(meta => {
       if (cancelled || !meta) return;
       setMetadata(meta);
       if (meta.coverArt) {
         const url = URL.createObjectURL(meta.coverArt);
+        coverUrlRef.current = url;
         setCoverUrl(url);
       }
     });
     return () => {
       cancelled = true;
-      if (coverUrl) URL.revokeObjectURL(coverUrl);
+      if (coverUrlRef.current) {
+        URL.revokeObjectURL(coverUrlRef.current);
+        coverUrlRef.current = null;
+      }
     };
   }, [file]);
 

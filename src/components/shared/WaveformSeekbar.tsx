@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
-import { cn } from '@/lib/utils';
+import { cn, formatTime } from '@/lib/utils';
 
 interface WaveformSeekbarProps {
   audioElement: HTMLAudioElement | null;
@@ -10,17 +10,6 @@ interface WaveformSeekbarProps {
   height?: number;
 }
 
-function formatTime(s: number): string {
-  if (!isFinite(s) || s < 0) return '0:00';
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, '0')}`;
-}
-
-/**
- * Clickable waveform seekbar that decodes audio from the element's src
- * and renders a peak waveform with playback progress overlay.
- */
 export function WaveformSeekbar({
   audioElement,
   className,
@@ -82,16 +71,41 @@ export function WaveformSeekbar({
       .catch(() => { ctx.close(); });
   }, [audioElement?.src, canvasWidth]);
 
-  // Track time via rAF
+  // Track time via rAF — only when playing
   useEffect(() => {
     if (!audioElement) return;
+
     const tick = () => {
       setCurrentTime(audioElement.currentTime);
       setDuration(audioElement.duration || 0);
-      rafRef.current = requestAnimationFrame(tick);
+      if (!audioElement.paused) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
     };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
+
+    const onPlay = () => { rafRef.current = requestAnimationFrame(tick); };
+    const onPause = () => { cancelAnimationFrame(rafRef.current); };
+    const onSeeked = () => {
+      setCurrentTime(audioElement.currentTime);
+      setDuration(audioElement.duration || 0);
+    };
+
+    audioElement.addEventListener('play', onPlay);
+    audioElement.addEventListener('pause', onPause);
+    audioElement.addEventListener('seeked', onSeeked);
+    audioElement.addEventListener('loadedmetadata', onSeeked);
+
+    // Start loop if already playing
+    if (!audioElement.paused) onPlay();
+    else onSeeked();
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      audioElement.removeEventListener('play', onPlay);
+      audioElement.removeEventListener('pause', onPause);
+      audioElement.removeEventListener('seeked', onSeeked);
+      audioElement.removeEventListener('loadedmetadata', onSeeked);
+    };
   }, [audioElement]);
 
   // Draw
@@ -125,7 +139,6 @@ export function WaveformSeekbar({
       ctx.fillRect(x, mid - peakH, barW, peakH * 2);
     }
 
-    // Playhead
     ctx.strokeStyle = playheadColor;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -133,7 +146,6 @@ export function WaveformSeekbar({
     ctx.lineTo(progressX, h);
     ctx.stroke();
 
-    // Hover line
     if (hovering) {
       ctx.strokeStyle = 'hsl(var(--foreground) / 0.3)';
       ctx.lineWidth = 1;
@@ -142,7 +154,6 @@ export function WaveformSeekbar({
       ctx.lineTo(hoverX, h);
       ctx.stroke();
 
-      // Hover time tooltip
       const hoverTime = duration > 0 ? (hoverX / w) * duration : 0;
       ctx.fillStyle = 'hsl(var(--foreground))';
       ctx.font = '10px monospace';
@@ -177,6 +188,8 @@ export function WaveformSeekbar({
         onMouseEnter={() => setHovering(true)}
         onMouseLeave={() => setHovering(false)}
         onMouseMove={handleMouseMove}
+        role="img"
+        aria-label="Audio waveform seekbar"
       />
       <div className="flex justify-between text-[10px] text-muted-foreground font-mono mt-0.5 px-0.5">
         <span>{formatTime(currentTime)}</span>

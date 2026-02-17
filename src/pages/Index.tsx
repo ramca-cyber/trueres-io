@@ -31,9 +31,9 @@ const Index = () => {
     <>
       <Helmet>
         <title>TrueRes.io — Free Browser-Based Audio & Video Tools</title>
-        <meta name="description" content="Free, privacy-first audio and video tools. Analyze, convert, and process files in your browser. No uploads, no servers. 35 professional-grade tools." />
+        <meta name="description" content={`Free, privacy-first audio and video tools. Analyze, convert, and process files in your browser. No uploads, no servers. ${TOOLS.length} professional-grade tools.`} />
         <meta property="og:title" content="TrueRes.io — Free Browser-Based Audio & Video Tools" />
-        <meta property="og:description" content="35 free professional audio & video tools. Analysis, conversion, processing — all in your browser." />
+        <meta property="og:description" content={`${TOOLS.length} free professional audio & video tools. Analysis, conversion, processing — all in your browser.`} />
         <meta property="og:type" content="website" />
         <meta property="og:url" content="https://trueres.io" />
         <link rel="canonical" href="https://trueres.io" />
@@ -61,7 +61,7 @@ const Index = () => {
                 <span className="text-primary">Analysis Tools</span>
               </h1>
               <p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">
-                35 professional-grade tools for audio forensics, conversion, video processing, and signal testing. 
+                {TOOLS.length} professional-grade tools for audio forensics, conversion, video processing, and signal testing. 
                 Everything runs locally in your browser — your files never leave your device.
               </p>
               <div className="mt-8 flex items-center justify-center gap-4 flex-wrap">
