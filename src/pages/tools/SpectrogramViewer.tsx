@@ -1,21 +1,77 @@
+import { useState, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
+import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { ProgressBar } from '@/components/shared/ProgressBar';
+import { SpectrogramCanvas } from '@/components/visualizations/SpectrogramCanvas';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, FFT_SIZES, COLORMAPS, type Colormap } from '@/config/constants';
+import { useAudioFile } from '@/hooks/use-audio-file';
+import { useAnalysis } from '@/hooks/use-analysis';
+import { type SpectrogramData } from '@/types/analysis';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const tool = getToolById('spectrogram')!;
 
 const SpectrogramViewer = () => {
+  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress } = useAudioFile();
+  const { runAnalysis, getResult } = useAnalysis();
+  const [colormap, setColormap] = useState<Colormap>('magma');
+
+  const spectrogramData = getResult<SpectrogramData & { type: string; timestamp: number; duration: number }>('spectrogram');
+
+  useEffect(() => {
+    if (pcm) {
+      runAnalysis('spectrogram');
+    }
+  }, [pcm, runAnalysis]);
+
+  if (!fileName) {
+    return (
+      <ToolPage tool={tool}>
+        <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={loadFile} label="Drop your audio file here" sublabel="WAV, FLAC, AIFF, MP3, OGG, AAC, M4A" />
+      </ToolPage>
+    );
+  }
+
   return (
     <ToolPage tool={tool}>
-      <FileDropZone
-        accept={AUDIO_ACCEPT}
-        onFileSelect={(file) => console.log('File:', file.name)}
-        label="Drop your audio file here"
-        sublabel="WAV, FLAC, AIFF, MP3, OGG, AAC, M4A"
-      />
-      <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center text-muted-foreground text-sm">
-        Drop a file above to view its spectrogram.
+      <div className="space-y-4">
+        <FileInfoBar
+          fileName={fileName}
+          fileSize={fileSize}
+          format={headerInfo?.format}
+          duration={headerInfo?.duration}
+          sampleRate={headerInfo?.sampleRate}
+          bitDepth={headerInfo?.bitDepth}
+          channels={headerInfo?.channels}
+        />
+
+        {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
+
+        {!spectrogramData && pcm && (
+          <ProgressBar value={50} label="Computing spectrogram..." />
+        )}
+
+        {spectrogramData && (
+          <>
+            <div className="flex items-center gap-3">
+              <label className="text-sm font-medium">Colormap</label>
+              <Select value={colormap} onValueChange={(v) => setColormap(v as Colormap)}>
+                <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {COLORMAPS.map((c) => (
+                    <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <SpectrogramCanvas
+              data={spectrogramData as unknown as SpectrogramData}
+              colormap={colormap}
+            />
+          </>
+        )}
       </div>
     </ToolPage>
   );
