@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
@@ -15,7 +16,7 @@ import { type DynamicRangeResult } from '@/types/analysis';
 const tool = getToolById('dynamic-range')!;
 
 const DynamicRangeMeter = () => {
-  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, decodeError } = useAudioFile();
+  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, decodeError, file } = useAudioFile();
   const { runAnalysis, getResult } = useAnalysis();
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -36,6 +37,7 @@ const DynamicRangeMeter = () => {
       {fileName && (
         <div className="space-y-4">
           <FileInfoBar fileName={fileName} fileSize={fileSize} format={headerInfo?.format} duration={headerInfo?.duration} sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth} channels={headerInfo?.channels} />
+          {file && <AudioPlayer src={file} label="Preview" />}
 
           {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." />}
           {decodeError && <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">{decodeError}</div>}

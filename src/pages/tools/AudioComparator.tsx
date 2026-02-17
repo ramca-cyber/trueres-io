@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { MetricCard } from '@/components/display/MetricCard';
@@ -40,6 +41,8 @@ function deltaCell(a: number, b: number, unit: string, higherIsBetter: boolean) 
 const AudioComparator = () => {
   const [fileA, setFileA] = useState<FileAnalysis | null>(null);
   const [fileB, setFileB] = useState<FileAnalysis | null>(null);
+  const [rawFileA, setRawFileA] = useState<File | null>(null);
+  const [rawFileB, setRawFileB] = useState<File | null>(null);
   const [loadingA, setLoadingA] = useState(false);
   const [loadingB, setLoadingB] = useState(false);
 
@@ -59,9 +62,9 @@ const AudioComparator = () => {
     setLoading(false);
   }, []);
 
-  const reset = () => { setFileA(null); setFileB(null); };
+  const reset = () => { setFileA(null); setFileB(null); setRawFileA(null); setRawFileB(null); };
 
-  const renderAnalysis = (label: string, data: FileAnalysis | null, loading: boolean) => (
+  const renderAnalysis = (label: string, data: FileAnalysis | null, loading: boolean, rawFile: File | null) => (
     <div className="space-y-3">
       <h3 className="text-sm font-heading font-semibold">{label}</h3>
       {loading && <ProgressBar value={50} label="Analyzing..." />}
@@ -72,6 +75,7 @@ const AudioComparator = () => {
             format={data.header.format} duration={data.header.duration}
             sampleRate={data.header.sampleRate} bitDepth={data.header.bitDepth}
           />
+          {rawFile && <AudioPlayer src={rawFile} label="Preview" />}
           <div className="grid grid-cols-2 gap-2">
             <MetricCard label="LUFS" value={`${data.lufs.integrated.toFixed(1)}`} />
             <MetricCard label="True Peak" value={`${data.lufs.truePeak.toFixed(1)} dBTP`} />
@@ -87,11 +91,11 @@ const AudioComparator = () => {
     <ToolPage tool={tool}>
       <div className="grid md:grid-cols-2 gap-4">
         {!fileA ? (
-          <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={(f) => analyzeFile(f, setFileA, setLoadingA)} label="Drop File A" sublabel="First file to compare" />
-        ) : renderAnalysis('File A', fileA, loadingA)}
+          <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={(f) => { setRawFileA(f); analyzeFile(f, setFileA, setLoadingA); }} label="Drop File A" sublabel="First file to compare" />
+        ) : renderAnalysis('File A', fileA, loadingA, rawFileA)}
         {!fileB ? (
-          <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={(f) => analyzeFile(f, setFileB, setLoadingB)} label="Drop File B" sublabel="Second file to compare" />
-        ) : renderAnalysis('File B', fileB, loadingB)}
+          <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={(f) => { setRawFileB(f); analyzeFile(f, setFileB, setLoadingB); }} label="Drop File B" sublabel="Second file to compare" />
+        ) : renderAnalysis('File B', fileB, loadingB, rawFileB)}
       </div>
 
       {fileA && fileB && (
