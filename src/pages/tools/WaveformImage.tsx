@@ -122,9 +122,9 @@ const WaveformImage = () => {
           />
         )}
 
-        <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+        <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
           Choose different file
-        </button>
+        </Button>
       </div>
     </ToolPage>
   );

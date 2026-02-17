@@ -4,6 +4,7 @@ import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
@@ -40,6 +41,7 @@ const VideoConverter = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="space-y-2">
             <label className="text-sm font-medium">Output Format</label>
             <Select value={outputFormat} onValueChange={(v) => { setOutputFormat(v); clearOutput(); }}>
@@ -72,7 +74,11 @@ const VideoConverter = () => {
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Conversion complete! {formatFileSize(outputBlob.size)}</p>
+              <p className="text-sm text-muted-foreground">
+                Conversion complete! {formatFileSize(outputBlob.size)}
+                {file && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% ${outputBlob.size < file.size ? 'smaller' : 'larger'})`}
+              </p>
+              <VideoPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}.${fmt?.ext || 'mp4'}`} label={`Download ${fmt?.label || 'video'}`} />
             </div>
           )}

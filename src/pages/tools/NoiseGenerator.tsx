@@ -19,6 +19,7 @@ const NoiseGenerator = () => {
   const [downloadBlob, setDownloadBlob] = useState<Blob | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const playingRef = useRef(false);
 
   const amplitude = Math.pow(10, level[0] / 20);
 
@@ -46,6 +47,7 @@ const NoiseGenerator = () => {
 
     audioCtxRef.current = ctx;
     sourceRef.current = source;
+    playingRef.current = true;
     setPlaying(true);
   }, [noiseType, amplitude]);
 
@@ -54,8 +56,19 @@ const NoiseGenerator = () => {
     audioCtxRef.current?.close();
     audioCtxRef.current = null;
     sourceRef.current = null;
+    playingRef.current = false;
     setPlaying(false);
   }, []);
+
+  // Auto-restart when params change while playing
+  useEffect(() => {
+    if (playingRef.current) {
+      stopPlayback();
+      // Small delay to let AudioContext close cleanly
+      const t = setTimeout(() => startPlayback(), 50);
+      return () => clearTimeout(t);
+    }
+  }, [noiseType, amplitude]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDownload = useCallback(() => {
     const buffer = generateNoise(10, 44100, noiseType, amplitude);

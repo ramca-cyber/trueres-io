@@ -63,11 +63,13 @@ const ToneGenerator = () => {
   }, [frequency, waveform, amplitude]);
 
   // Update live oscillator when params change
-  if (oscRef.current && playing) {
-    oscRef.current.frequency.value = frequency;
-    oscRef.current.type = waveform;
-    if (gainRef.current) gainRef.current.gain.value = amplitude;
-  }
+  useEffect(() => {
+    if (oscRef.current && playing) {
+      oscRef.current.frequency.value = frequency;
+      oscRef.current.type = waveform;
+      if (gainRef.current) gainRef.current.gain.value = amplitude;
+    }
+  }, [frequency, waveform, amplitude, playing]);
 
   return (
     <ToolPage tool={tool}>

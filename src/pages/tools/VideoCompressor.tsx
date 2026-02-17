@@ -4,6 +4,7 @@ import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
@@ -40,6 +41,7 @@ const VideoCompressor = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-sm font-medium">Quality (CRF: {crf})</label>
@@ -76,6 +78,7 @@ const VideoCompressor = () => {
                 Compressed! {formatFileSize(outputBlob.size)}
                 {file && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% ${outputBlob.size < file.size ? 'smaller' : 'larger'})`}
               </p>
+              <VideoPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_compressed.mp4`} label="Download compressed video" />
             </div>
           )}

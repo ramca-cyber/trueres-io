@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
@@ -33,6 +34,16 @@ const VideoToGif = () => {
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
 
+  // GIF preview URL with proper cleanup
+  const gifUrl = useMemo(() => {
+    if (!outputBlob) return null;
+    return URL.createObjectURL(outputBlob);
+  }, [outputBlob]);
+
+  useEffect(() => {
+    return () => { if (gifUrl) URL.revokeObjectURL(gifUrl); };
+  }, [gifUrl]);
+
   return (
     <ToolPage tool={tool}>
       {!file ? (
@@ -40,6 +51,7 @@ const VideoToGif = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">FPS: {fps}</label>
@@ -71,7 +83,13 @@ const VideoToGif = () => {
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">GIF created! {formatFileSize(outputBlob.size)}</p>
+              <p className="text-sm text-muted-foreground">
+                GIF created! {formatFileSize(outputBlob.size)}
+                {file && ` (${Math.round((outputBlob.size / file.size) * 100)}% of original)`}
+              </p>
+              {gifUrl && (
+                <img src={gifUrl} alt="Generated GIF preview" className="w-full max-h-[360px] object-contain rounded-md" />
+              )}
               <DownloadButton blob={outputBlob} filename={`${baseName}.gif`} label="Download GIF" />
             </div>
           )}
