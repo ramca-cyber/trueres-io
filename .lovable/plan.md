@@ -1,121 +1,137 @@
 
-# TrueRes.io Full Website Audit
 
-## Audit Summary
+# Audio Analysis Tools -- Completeness Evaluation and Enhancement Plan
 
-After reviewing all 35 tool pages, shared components, engine modules, state management, and routing, here are the findings organized by severity.
+## Tool-by-Tool Assessment
 
----
+### 1. Hi-Res Verifier -- COMPLETE
+- Verdict banner with score circle and grade (A-F)
+- 4 metric cards (Bit Depth, Freq Ceiling, Lossy Artifacts, DR)
+- FAQ section, error handling, reset button
+- **No changes needed**
 
-## Critical Issues (Bugs)
+### 2. Lossy Detector -- COMPLETE
+- Clear pass/fail verdict with icon
+- 4 metric cards (Confidence, Spectral Holes, Freq Ceiling, Source Guess)
+- Encoder fingerprint display
+- Inline spectrogram for visual verification
+- **No changes needed**
 
-### 1. Shared AudioStore causes cross-tool data contamination
-All analysis-based tools (12 tools) share a single global `useAudioStore` Zustand store. When a user navigates from one tool to another without refreshing, the previous tool's file, PCM data, and analysis cache persist. This means:
-- Opening Hi-Res Verifier, analyzing a file, then navigating to LUFS Meter will show the old file's data instead of a fresh drop zone
-- The "Analyze another file" button on Hi-Res Verifier and LUFS Meter calls `window.location.reload()` instead of `store.clear()` -- a poor UX workaround
+### 3. File Inspector -- COMPLETE
+- Format details table (9 fields)
+- Metadata table (artist, album, etc.)
+- Collapsible raw header data
+- **No changes needed**
 
-**Fix**: Clear the audio store on tool page mount (add `useEffect(() => store.clear(), [])` to each analysis tool or inside the `ToolPage` wrapper when the tool ID changes).
-
-### 2. Shared FFmpegStore causes cross-tool state bleed
-Same issue for processing tools (13 tools). The `useFFmpegStore` is a singleton. If a user converts audio, navigates to Video Trimmer, the old `outputBlob` and `progress` may still be visible.
-
-**Fix**: Call `reset()` on `useFFmpegStore` when the tool component mounts or when `ToolPage` tool ID changes.
-
-### 3. AudioConverter passes duplicate `inputName`
-In `AudioConverter.tsx`, `inputName` is constructed locally, then passed to `process()` which constructs its own `inputName` again inside `useFFmpeg.process()`. The `args` array references the local `inputName`, but `processFile` writes the file with the hook's `inputName`. These could mismatch if naming logic diverges. The same pattern exists in `AudioTrimmer`, `AudioNormalizer`, `MetadataStripper`, `SampleRateConverter`, `ChannelOps`, and all video tools.
-
-**Fix**: Standardize -- either let the hook handle naming (and accept a function that generates args from the final name), or remove the duplicate naming from the hook.
-
-### 4. TagEditor is read-only despite being called "Editor"
-The Tag Editor only displays tags, with a note saying "Full editing support is coming soon." This is misleading to users expecting editing functionality.
-
-**Fix**: Either rename to "Tag Viewer" or implement basic tag editing via ffmpeg metadata writing.
+### 4. Waveform Image -- COMPLETE
+- Customizable dimensions, colors
+- PNG export with download button
+- **No changes needed** (its purpose is export, not interactive viewing)
 
 ---
 
-## Moderate Issues (Functional Gaps)
+### 5. LUFS Meter -- NEEDS ENHANCEMENT
+Currently shows 4 metric cards + platform compliance badges. Missing a loudness history chart, which is the most useful feature for mastering engineers.
 
-### 5. No "reset/new file" button on most analysis tools
-Only Hi-Res Verifier and LUFS Meter have a "reset" link (via `window.location.reload()`). The other 10 analysis tools (Spectrogram, DR Meter, Waveform, Stereo Analyzer, File Inspector, Lossy Detector, Spectrum, Comparator, Batch, Freq Response) have no way to analyze a different file without manually navigating away and back.
+**Add:**
+- Short-term loudness over time chart (line graph using the existing `shortTerm[]` array)
+- Momentary loudness max metric card
 
-**Fix**: Add a consistent "Analyze another file" button to all analysis tools that calls `store.clear()`.
+### 6. Dynamic Range Meter -- NEEDS ENHANCEMENT
+Shows only 4 metric cards. Feels sparse compared to competitor tools.
 
-### 6. Batch Analyzer `onFileSelect` is a no-op
-In `BatchAnalyzer.tsx` line 81, `onFileSelect={() => {}}` is passed as a required prop but does nothing. This works because `onMultipleFiles` handles the actual logic, but if a user drops a single file, nothing happens silently.
+**Add:**
+- RMS Level metric card
+- Loudness war rating context (e.g., "Comparable to: CD-era rock" or "Comparable to: classical recording")
+- Visual DR meter bar (horizontal gauge showing where the score falls on a 0-20 scale)
 
-**Fix**: Handle single-file drops in `onFileSelect` too (wrap it in an array and pass to `handleFiles`).
+### 7. Stereo Analyzer -- NEEDS ENHANCEMENT
+Shows only 4 metric cards with no visualization. Stereo analysis tools universally include visual representations.
 
-### 7. FFmpeg processing tools share a singleton FFmpeg instance but no concurrency guard
-If a user starts converting in Audio Converter, navigates to Video Compressor, and starts another process, both will attempt to use the same FFmpeg instance simultaneously, likely corrupting the virtual filesystem.
+**Add:**
+- Side Energy metric card (already computed but not displayed)
+- Correlation meter visualization (horizontal bar from -1 to +1)
+- Balance meter (L/R energy comparison)
+- Mono/stereo recommendation text
 
-**Fix**: Add a global processing lock or disable processing buttons when another FFmpeg operation is in progress.
+### 8. Waveform Viewer -- NEEDS ENHANCEMENT
+Shows only a bare canvas with no interactivity. Very thin compared to competitors.
 
-### 8. Missing OGG metadata parsing
-The `useAudioFile` hook only parses metadata for MP3 (ID3) and FLAC (Vorbis Comments). OGG files also contain Vorbis Comments but are not parsed, so Tag Editor and File Inspector show no metadata for OGG files.
+**Add:**
+- Duration and peak level info cards
+- Per-channel toggle (show L/R separately for stereo files)
+- Zoom controls (buttons to adjust resolution)
 
-**Fix**: Add OGG Vorbis Comment extraction in the `useAudioFile` hook.
+### 9. Spectrum Analyzer -- NEEDS ENHANCEMENT
+Shows only a bare canvas. Needs controls and summary metrics.
 
-### 9. WaveformImage canvas not responsive
-The canvas has a fixed `width`/`height` set programmatically. On mobile, the rendered image may not match the visible canvas area.
+**Add:**
+- Peak frequency and magnitude display
+- Octave band toggle (show/hide 1/3 octave bars)
+- Dominant frequency metric card
 
-**Fix**: Use the container width for default dimensions or match canvas to container on resize.
+### 10. Spectrogram Viewer -- NEEDS MINOR ENHANCEMENT
+Has colormap selector, which is good. Missing common controls.
 
----
+**Add:**
+- Dynamic range (dB) min/max sliders to adjust contrast
+- FFT size selector (already imported `FFT_SIZES` but unused)
 
-## Minor Issues (UX Polish)
+### 11. Audio Comparator -- NEEDS MINOR ENHANCEMENT
+Side-by-side comparison with table is solid. Missing reset and difference highlighting.
 
-### 10. `SpectrumCanvas` prop `showOctaveBands` unused in FreqResponse
-The `FreqResponse` tool passes `showOctaveBands={false}` but `SpectrumCanvas` still tries to render them if data has `octaveBands`. This works correctly but is redundant.
+**Add:**
+- "Reset" / "Compare different files" button
+- Delta column in comparison table showing the difference between A and B
+- Color-coded cells (green when A is better, red when worse)
 
-### 11. No loading skeleton for lazy-loaded tool pages
-The Suspense fallback is a simple spinner. Tool pages should show a skeleton matching the ToolPage layout for less jarring transitions.
+### 12. Batch Analyzer -- NEEDS MINOR ENHANCEMENT
+Table with album averages is functional.
 
-### 12. Console warning about `SharedArrayBuffer`
-The `BrowserCompatBanner` correctly warns about `SharedArrayBuffer`, but the ffmpeg.wasm UMD build used (0.12.6) actually works without it (single-threaded mode). The warning may alarm users unnecessarily when processing will still work.
-
-**Fix**: Refine the warning to say processing tools may be slower, not unavailable.
-
-### 13. Memory leak in generator tools
-`ToneGenerator`, `NoiseGenerator`, `SweepGenerator`, `HearingTest`, and `DacTest` create `AudioContext` instances but only close them on stop. If a user navigates away while playing, the AudioContext is never closed.
-
-**Fix**: Add cleanup in `useEffect` return to stop playback and close AudioContext on unmount.
-
-### 14. No error boundary around tool pages
-If an analysis module throws (e.g., malformed file), the entire app crashes. There is no error boundary wrapping tool content.
+**Add:**
+- CSV export button
+- "Analyze more files" / reset button
+- Sort by column (click headers)
 
 ---
 
 ## Implementation Plan
 
-### Phase 1 -- Critical Fixes (store isolation + input naming)
-1. Add store reset logic to `ToolPage.tsx` -- when `tool.id` changes, clear both `useAudioStore` and `useFFmpegStore`
-2. Fix the input name duplication in `useFFmpeg.process()` -- accept `inputName` as a parameter instead of generating it internally, since all callers already generate one
-3. Add a global FFmpeg processing lock to prevent concurrent operations
+### Phase 1 -- LUFS Meter + DR Meter (highest impact)
+1. **LUFS Meter**: Add a loudness history line chart rendering short-term LUFS values over time using a canvas element. Add a Momentary Max metric card.
+2. **Dynamic Range Meter**: Add RMS Level card, a visual DR gauge bar, and context text comparing the DR score to known genres.
 
-### Phase 2 -- Reset Buttons + Batch Fix
-4. Add a "Choose different file" / "Reset" button to all analysis tool pages
-5. Fix `BatchAnalyzer` single-file drop handling
-6. Add OGG metadata parsing in `useAudioFile`
+### Phase 2 -- Stereo Analyzer + Waveform Viewer
+3. **Stereo Analyzer**: Add Side Energy card, a horizontal correlation meter bar (-1 to +1), L/R balance indicator, and recommendation text.
+4. **Waveform Viewer**: Add peak level and duration info cards above the canvas, a channel selector for stereo files, and zoom +/- buttons.
 
-### Phase 3 -- Memory + Error Handling
-7. Add `useEffect` cleanup to all 5 generator/test tools to close AudioContext on unmount
-8. Wrap tool content in an error boundary component
-9. Fix `BrowserCompatBanner` warning text for SharedArrayBuffer
+### Phase 3 -- Spectrum + Spectrogram
+5. **Spectrum Analyzer**: Add peak frequency display, octave band toggle, and dominant frequency card.
+6. **Spectrogram Viewer**: Wire up FFT size selector and add min/max dB sliders for contrast adjustment.
 
-### Phase 4 -- UX Polish
-10. Rename TagEditor to "Tag Viewer" or add basic ffmpeg-based tag writing
-11. Improve lazy-load skeleton
-12. Make WaveformImage canvas responsive
+### Phase 4 -- Comparator + Batch polish
+7. **Audio Comparator**: Add reset button, delta column, and color-coded comparison cells.
+8. **Batch Analyzer**: Add CSV export button, reset/add-more button.
 
 ---
 
 ## Technical Details
 
 ### Files to modify:
-- `src/components/shared/ToolPage.tsx` -- add store clearing on tool ID change
-- `src/hooks/use-ffmpeg.ts` -- accept inputName param, add lock
-- `src/pages/tools/*.tsx` -- add reset buttons (10 analysis tools), add useEffect cleanup (5 generator tools)
-- `src/pages/tools/BatchAnalyzer.tsx` -- fix single-file handling
-- `src/hooks/use-audio-file.ts` -- add OGG metadata parsing
-- `src/components/shared/BrowserCompatBanner.tsx` -- refine warning text
-- New file: `src/components/shared/ErrorBoundary.tsx`
+- `src/pages/tools/LufsMeter.tsx` -- add loudness history canvas component and momentary max card
+- `src/pages/tools/DynamicRangeMeter.tsx` -- add RMS card, DR gauge, genre context
+- `src/pages/tools/StereoAnalyzer.tsx` -- add correlation meter bar, side energy card, balance indicator
+- `src/pages/tools/WaveformViewer.tsx` -- add info cards, channel selector, zoom controls
+- `src/pages/tools/SpectrumAnalyzer.tsx` -- add peak freq display, octave toggle
+- `src/pages/tools/SpectrogramViewer.tsx` -- wire FFT size selector, add dB range sliders
+- `src/pages/tools/AudioComparator.tsx` -- add reset, delta column, color coding
+- `src/pages/tools/BatchAnalyzer.tsx` -- add CSV export, reset button
+
+### New components:
+- `src/components/visualizations/LoudnessHistoryCanvas.tsx` -- line chart for LUFS short-term over time
+- `src/components/visualizations/CorrelationMeter.tsx` -- horizontal -1 to +1 gauge
+- `src/components/visualizations/DRGauge.tsx` -- horizontal DR score gauge with genre zones
+
+### No new dependencies required
+All visualizations will use HTML Canvas (consistent with existing pattern). No charting library needed.
+
