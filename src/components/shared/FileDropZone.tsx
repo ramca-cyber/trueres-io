@@ -93,6 +93,9 @@ export function FileDropZone({
           Supported: {accept.replace(/\./g, '').replace(/,/g, ', ').toUpperCase()}
         </p>
       )}
+      {multiple && (
+        <p className="text-xs text-primary/70 mt-1">Select multiple files for batch processing</p>
+      )}
 
       {error && (
         <p className="mt-3 text-sm text-destructive font-medium">{error}</p>
