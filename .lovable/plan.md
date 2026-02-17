@@ -1,110 +1,81 @@
 
 
-# Sidebar Redesign: Better Categories, Featured List, and Icon Coverage
+# Web Worker Implementation for Audio Analysis
 
-## Problems Identified
+## Problem
+All audio analysis (FFT, LUFS, spectrogram, bit depth, bandwidth, lossy detection, stereo, dynamic range, waveform, spectrum) currently runs synchronously on the main thread. On long or high-sample-rate files, this freezes the UI for several seconds.
 
-1. Featured list has 6 original tools, missing high-engagement new tools (ABX Test, Crossfeed, Ear Training, Soundstage Test)
-2. "Signal Generators and Testing" category has 15 tools -- too many, mixing unrelated tools
-3. Headphone tools are scattered across "generators" and "processing" with no grouping
-4. The `iconMap` in ToolNav.tsx is missing ~15 icons for new tools (they all render as a fallback Search icon)
-5. Tool ordering within categories is arbitrary (insertion order)
-6. No tool count badges on categories
+## Approach
+Create a single dedicated Web Worker that handles all analysis tasks. The analysis modules are already pure functions (input: typed arrays, output: plain objects), making them ideal candidates for offloading.
 
----
+We use a **single worker with a message-based dispatch** pattern rather than one worker per module, keeping things simple and avoiding worker startup overhead.
+
+## Architecture
+
+```text
+Main Thread                          Worker Thread
++-----------------+                  +-------------------+
+| useAnalysis()   |  postMessage     | analysis-worker   |
+|   runAnalysis() | -------------+-->| onmessage:        |
+|                 |  (key, PCM   |   |   switch(key)     |
+|                 |   transferable)  |   run module      |
+|                 |                  |   postMessage      |
+|   onmessage <--|------------------+   (result)         |
+|   cacheResult   |                  +-------------------+
++-----------------+
+```
 
 ## Changes
 
-### 1. Add a new "Headphone" category
+### 1. New file: `src/engines/analysis/analysis-worker.ts`
+- A Web Worker script that imports all analysis modules
+- Listens for messages with `{ key, channelData, sampleRate, headerInfo }`
+- Runs the appropriate analysis function based on `key`
+- Posts the result back
+- For `verdict`, runs all 4 sub-analyses inside the worker (no round-trips)
+- For `waveform`/`spectrum`/`spectrogram`, wraps the result with the required metadata fields
 
-Split from generators. Move these 6 tools into a new `headphone` category:
-- Crossfeed Simulator (currently in `processing`)
-- Binaural Beats (currently in `generators`)
-- Soundstage Test (currently in `generators`)
-- Channel Balance (currently in `generators`)
-- Ear Training (currently in `generators`)
-- Headphone Guide (currently in `reference`)
+### 2. New file: `src/engines/analysis/worker-client.ts`
+- Creates and manages the worker instance (singleton, lazy-initialized)
+- Exports `runAnalysisInWorker(key, pcmData, headerInfo)` that returns a `Promise<AnalysisResult>`
+- Uses a pending-requests map with unique IDs to match responses to promises
+- Transfers `Float32Array` buffers using `Transferable` for zero-copy (with structured clone fallback)
+- Includes a `terminateWorker()` cleanup function
+- Falls back to main-thread execution if `Worker` is not available
 
-New category definition:
-- id: `headphone`
-- label: "Headphone Tools"
-- icon: Headphones
-- color: text-purple-400
+### 3. Modified file: `src/hooks/use-analysis.ts`
+- Import and use `runAnalysisInWorker` instead of calling analysis functions directly
+- The switch/case block is replaced with a single call to the worker client
+- The `verdict` case no longer needs to manually orchestrate sub-analyses (worker handles it internally)
+- Caching and `setAnalyzing` logic remains unchanged
+- Graceful fallback: if workers are unavailable, keep the current synchronous path
 
-### 2. Updated category order (6 categories)
+### 4. Modified file: `src/pages/About.tsx`
+- The "Web Workers" claim on line 62 is already there but was inaccurate. After this change, it becomes truthful. No text change needed.
 
-1. Audio Analysis and Forensics (14 tools)
-2. Audio Processing (9 tools)
-3. Video Processing (7 tools)
-4. Signal Generators and Testing (9 tools, down from 15)
-5. Headphone Tools (6 tools, new)
-6. Reference and Education (7 tools, down from 8)
-
-### 3. Updated Featured list (8 tools)
-
-Replace the current 6 with a curated 8 that balances traffic drivers and new highlights:
-
-1. Hi-Res Verifier (flagship tool)
-2. LUFS Meter (professional standard)
-3. Spectrogram (visual appeal)
-4. ABX Test (audiophile engagement)
-5. Audio Converter (utility workhorse)
-6. Crossfeed Simulator (headphone highlight)
-7. Video to MP3 (high search volume)
-8. Ear Training (sticky/gamified)
-
-### 4. Fix all missing icons in iconMap
-
-Add these missing icon imports and mappings:
-- `Brain` (Binaural Beats)
-- `Compass` (Soundstage)
-- `Scale` (Channel Balance)
-- `Flame` (Burn-In)
-- `Disc` (Turntable)
-- `CircleDot` (Subwoofer)
-- `Speaker` (Speaker Test)
-- `LayoutGrid` (Surround Reference)
-- `ArrowLeftRight` (dB Converter)
-- `Clock` (Listening Monitor)
-- `Shuffle` (ABX Test)
-- `TriangleAlert` (Clipping Detector)
-- `Mic` (Room Analyzer)
-- `Binary` (Bit-Perfect)
-- `Play` (Media Player)
-
-### 5. Add tool count badges to category headers
-
-Show the number of tools per category next to the label, e.g., "Audio Analysis (14)".
-
-### 6. Sort tools alphabetically within each category
-
-Currently tools appear in insertion order. Sorting alphabetically by `shortName` makes scanning faster.
-
----
+### 5. New file: `src/engines/analysis/analysis-worker.test.ts`
+- Unit tests for the worker client:
+  - Test that analysis runs and returns correct result types
+  - Test fallback behavior when Worker is unavailable
+  - Test with synthetic PCM data (sine wave) to verify LUFS/bandwidth/bit-depth produce reasonable values
 
 ## Technical Details
 
-### Files Modified
+**Transferable optimization**: Channel data (`Float32Array[]`) is sent to the worker using `Transferable` to avoid copying large buffers. Since the store already holds a reference to the decoded PCM, we send copies (or accept that the original becomes neutered and re-decode if needed). In practice, the simplest approach is to use structured clone (Vite handles this well) since the data stays in the store for other uses.
 
-**`src/types/tools.ts`**
-- Add `'headphone'` to the `ToolCategory` union type
-- Add the new category entry to `TOOL_CATEGORIES` array (position 5, before reference)
+**Vite worker syntax**: Use `new Worker(new URL('./analysis-worker.ts', import.meta.url), { type: 'module' })` which Vite handles natively with no extra config.
 
-**`src/config/tool-registry.ts`**
-- Change `category` field for 6 tools from their current categories to `'headphone'`
-  - `crossfeed`: `processing` -> `headphone`
-  - `binaural-beats`: `generators` -> `headphone`
-  - `soundstage-test`: `generators` -> `headphone`
-  - `channel-balance`: `generators` -> `headphone`
-  - `ear-training`: `generators` -> `headphone`
-  - `headphone-guide`: `reference` -> `headphone`
+**Message protocol**:
+```text
+Request:  { id, key, channelData: Float32Array[], sampleRate, bitDepth, headerSampleRate }
+Response: { id, key, result, error? }
+```
 
-**`src/components/layout/ToolNav.tsx`**
-- Update `FEATURED_IDS` array to the new 8-item list
-- Add all 15 missing icons to the import statement and `iconMap`
-- Add `Headphones` to `categoryIcons`
-- Add tool count badge in the category trigger: `({tools.length})`
-- Sort tools alphabetically before rendering: `tools.sort((a, b) => a.shortName.localeCompare(b.shortName))`
+**Verdict handling**: The worker runs bitDepth, bandwidth, lossyDetect, and dynamicRange internally and calls `computeVerdict` with those results, then returns all 5 results at once. The client caches all sub-results.
 
-**`src/pages/Index.tsx`**
-- The homepage "All Tools" grid reads from `TOOL_CATEGORIES` and `TOOLS` dynamically, so it will automatically pick up the new headphone category -- no changes needed there.
+## Testing Plan
+- Create a test with a synthetic 1-second 44100Hz sine wave
+- Verify the worker client returns valid `BitDepthResult`, `LUFSResult`, etc.
+- Verify the fallback path works when `Worker` is undefined
+- Run via `vitest`
+
