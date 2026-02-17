@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -104,7 +105,6 @@ const SpectrogramViewer = () => {
               toggles={toggles}
               fullscreen={{ containerRef }}
               download={{ canvasRef: viz.canvasRef, filename: `${fileName}-spectrogram.png` }}
-              onNewFile={() => useAudioStore.getState().clear()}
             />
             <SpectrogramCanvas
               data={spectrogramData as unknown as SpectrogramData}
@@ -130,6 +130,12 @@ const SpectrogramViewer = () => {
             <p className={`text-xs text-muted-foreground ${viz.isZoomed ? '' : 'invisible'}`}>Scroll to zoom time · Shift+scroll to zoom freq · Drag to pan · Double-click to reset</p>
           </div>
         )}
+
+        <div className="flex justify-center">
+          <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 px-8" onClick={() => useAudioStore.getState().clear()}>
+            Analyze another file
+          </Button>
+        </div>
       </div>
     </ToolPage>
   );
