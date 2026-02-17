@@ -1,81 +1,57 @@
 
 
-# Web Worker Implementation for Audio Analysis
+# Fix: "createMediaElementSource" Error on File Change
 
-## Problem
-All audio analysis (FFT, LUFS, spectrogram, bit depth, bandwidth, lossy detection, stereo, dynamic range, waveform, spectrum) currently runs synchronously on the main thread. On long or high-sample-rate files, this freezes the UI for several seconds.
+## Root Cause
 
-## Approach
-Create a single dedicated Web Worker that handles all analysis tasks. The analysis modules are already pure functions (input: typed arrays, output: plain objects), making them ideal candidates for offloading.
+In `src/components/shared/AudioPlayer.tsx`, the Web Audio graph setup effect (line 51-105) depends on `[url]`. Every time a new file is loaded, `url` changes, the effect re-runs, and calls `ctx.createMediaElementSource(el)` on the same `<audio>` element. However, the Web Audio spec only allows an `HTMLMediaElement` to be connected to a `MediaElementSourceNode` **once in its lifetime** -- even after the previous `AudioContext` is closed.
 
-We use a **single worker with a message-based dispatch** pattern rather than one worker per module, keeping things simple and avoiding worker startup overhead.
+## Fix
 
-## Architecture
+**Strategy**: Create the `MediaElementSourceNode` only once per `<audio>` element mount, and keep it alive across file changes. The audio graph (filters, gain, analyser) is created once and reused. Only the `src` attribute on the `<audio>` element changes when a new file is loaded.
 
-```text
-Main Thread                          Worker Thread
-+-----------------+                  +-------------------+
-| useAnalysis()   |  postMessage     | analysis-worker   |
-|   runAnalysis() | -------------+-->| onmessage:        |
-|                 |  (key, PCM   |   |   switch(key)     |
-|                 |   transferable)  |   run module      |
-|                 |                  |   postMessage      |
-|   onmessage <--|------------------+   (result)         |
-|   cacheResult   |                  +-------------------+
-+-----------------+
+### Changes to `src/components/shared/AudioPlayer.tsx`
+
+1. **Remove `url` from the Web Audio effect's dependency array** (line 105) -- change it to `[]` (mount-only) or use a ref-based guard.
+
+2. **Use a ref-based guard** to ensure `createMediaElementSource` is only called once per element:
+   - Add a `connectedRef = useRef(false)` flag
+   - In the effect, check `if (connectedRef.current) return;` before creating the source
+   - Set `connectedRef.current = true` after connecting
+
+3. **Do NOT close the AudioContext on cleanup** of this effect (since the source can't be re-created). Instead, close it only on component unmount via a separate cleanup effect.
+
+4. **Keep the `url` effect separate** (lines 44-48) -- it already correctly manages object URLs independently.
+
+### Technical Detail
+
+```
+// Before (breaks on 2nd file):
+useEffect(() => {
+  const el = innerRef.current;
+  if (!el || ctxRef.current) return;    // guard fails after cleanup nulls ctxRef
+  const ctx = new AudioContext();
+  const source = ctx.createMediaElementSource(el);  // CRASH
+  ...
+}, [url]);
+
+// After (works):
+useEffect(() => {
+  const el = innerRef.current;
+  if (!el || sourceRef.current) return;  // only create once per element
+  const ctx = new AudioContext();
+  const source = ctx.createMediaElementSource(el);
+  ...
+  // no cleanup that nulls refs -- graph stays alive
+}, []);
+
+// Separate unmount cleanup:
+useEffect(() => {
+  return () => {
+    ctxRef.current?.close().catch(() => {});
+  };
+}, []);
 ```
 
-## Changes
-
-### 1. New file: `src/engines/analysis/analysis-worker.ts`
-- A Web Worker script that imports all analysis modules
-- Listens for messages with `{ key, channelData, sampleRate, headerInfo }`
-- Runs the appropriate analysis function based on `key`
-- Posts the result back
-- For `verdict`, runs all 4 sub-analyses inside the worker (no round-trips)
-- For `waveform`/`spectrum`/`spectrogram`, wraps the result with the required metadata fields
-
-### 2. New file: `src/engines/analysis/worker-client.ts`
-- Creates and manages the worker instance (singleton, lazy-initialized)
-- Exports `runAnalysisInWorker(key, pcmData, headerInfo)` that returns a `Promise<AnalysisResult>`
-- Uses a pending-requests map with unique IDs to match responses to promises
-- Transfers `Float32Array` buffers using `Transferable` for zero-copy (with structured clone fallback)
-- Includes a `terminateWorker()` cleanup function
-- Falls back to main-thread execution if `Worker` is not available
-
-### 3. Modified file: `src/hooks/use-analysis.ts`
-- Import and use `runAnalysisInWorker` instead of calling analysis functions directly
-- The switch/case block is replaced with a single call to the worker client
-- The `verdict` case no longer needs to manually orchestrate sub-analyses (worker handles it internally)
-- Caching and `setAnalyzing` logic remains unchanged
-- Graceful fallback: if workers are unavailable, keep the current synchronous path
-
-### 4. Modified file: `src/pages/About.tsx`
-- The "Web Workers" claim on line 62 is already there but was inaccurate. After this change, it becomes truthful. No text change needed.
-
-### 5. New file: `src/engines/analysis/analysis-worker.test.ts`
-- Unit tests for the worker client:
-  - Test that analysis runs and returns correct result types
-  - Test fallback behavior when Worker is unavailable
-  - Test with synthetic PCM data (sine wave) to verify LUFS/bandwidth/bit-depth produce reasonable values
-
-## Technical Details
-
-**Transferable optimization**: Channel data (`Float32Array[]`) is sent to the worker using `Transferable` to avoid copying large buffers. Since the store already holds a reference to the decoded PCM, we send copies (or accept that the original becomes neutered and re-decode if needed). In practice, the simplest approach is to use structured clone (Vite handles this well) since the data stays in the store for other uses.
-
-**Vite worker syntax**: Use `new Worker(new URL('./analysis-worker.ts', import.meta.url), { type: 'module' })` which Vite handles natively with no extra config.
-
-**Message protocol**:
-```text
-Request:  { id, key, channelData: Float32Array[], sampleRate, bitDepth, headerSampleRate }
-Response: { id, key, result, error? }
-```
-
-**Verdict handling**: The worker runs bitDepth, bandwidth, lossyDetect, and dynamicRange internally and calls `computeVerdict` with those results, then returns all 5 results at once. The client caches all sub-results.
-
-## Testing Plan
-- Create a test with a synthetic 1-second 44100Hz sine wave
-- Verify the worker client returns valid `BitDepthResult`, `LUFSResult`, etc.
-- Verify the fallback path works when `Worker` is undefined
-- Run via `vitest`
+This is a one-file fix affecting only `src/components/shared/AudioPlayer.tsx`.
 
