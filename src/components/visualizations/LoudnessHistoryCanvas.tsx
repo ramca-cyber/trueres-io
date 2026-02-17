@@ -242,13 +242,13 @@ export function LoudnessHistoryCanvas({
   }, [ref, cursorRef, cursorLabel]);
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div className="space-y-1">
-        <h3 className="text-sm font-heading font-semibold">Loudness Over Time</h3>
+    <div className="space-y-1">
+      <h3 className="text-sm font-heading font-semibold">Loudness Over Time</h3>
+      <div className="viz-canvas-wrap" style={{ minHeight: '220px' }}>
         <canvas
           ref={ref as React.RefObject<HTMLCanvasElement>}
-          className="w-full rounded-md border border-border"
-          style={{ cursor: 'crosshair', height: '220px' }}
+          className="viz-canvas rounded-md border border-border"
+          style={{ cursor: 'crosshair' }}
           {...canvasHandlers}
         />
       </div>

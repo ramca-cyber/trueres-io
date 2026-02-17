@@ -341,11 +341,11 @@ export function SpectrogramCanvas({
   }, [ref, cursorRef, cursorLabel]);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="viz-canvas-wrap" style={{ minHeight: '400px' }}>
       <canvas
         ref={ref as React.RefObject<HTMLCanvasElement>}
-        className="w-full rounded-md border border-border"
-        style={{ imageRendering: 'auto', cursor: 'crosshair', height: '400px' }}
+        className="viz-canvas rounded-md border border-border"
+        style={{ imageRendering: 'auto', cursor: 'crosshair' }}
         {...canvasHandlers}
       />
     </div>

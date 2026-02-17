@@ -84,7 +84,7 @@ const SpectrumAnalyzer = () => {
               <MetricCard label="Peak Magnitude" value={peakMag !== null ? `${peakMag.toFixed(1)} dB` : '—'} subtext="At peak frequency" status="neutral" />
               <MetricCard label="Nyquist" value={headerInfo?.sampleRate ? formatFrequency(headerInfo.sampleRate / 2) : '—'} subtext="Maximum representable freq" status="neutral" />
             </div>
-            <div ref={containerRef} className="space-y-2">
+            <div ref={containerRef} className="space-y-2 viz-fullscreen-container">
               <VizToolbar
                 zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
                 fullscreen={{ containerRef }}

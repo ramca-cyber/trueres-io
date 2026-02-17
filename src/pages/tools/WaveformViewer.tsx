@@ -82,7 +82,7 @@ const WaveformViewer = () => {
         {!waveformData && pcm && <ProgressBar value={50} label="Computing waveform..." />}
 
         {waveformData && (
-          <div ref={containerRef} className="space-y-2">
+          <div ref={containerRef} className="space-y-2 viz-fullscreen-container">
             <VizToolbar
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
               fullscreen={{ containerRef }}

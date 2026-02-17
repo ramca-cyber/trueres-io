@@ -95,6 +95,28 @@
   }
 }
 
+/* Visualization canvas layout */
+.viz-canvas-wrap {
+  position: relative;
+  flex: 1 1 0%;
+}
+
+.viz-canvas-wrap > .viz-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* Fullscreen: container becomes flex column, canvas fills remaining space */
+.viz-fullscreen-container:fullscreen {
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--background));
+  padding: 0.5rem;
+  gap: 0.5rem;
+}
+
 @keyframes indeterminate {
   0% { transform: translateX(-100%); }
   50% { transform: translateX(200%); }
