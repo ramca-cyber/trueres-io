@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Shield } from 'lucide-react';
+import logoImg from '@/assets/logo.png';
 
 export function Footer() {
   return (
@@ -9,7 +9,7 @@ export function Footer() {
           {/* Brand */}
           <div>
             <Link to="/" className="flex items-center gap-2 font-heading text-lg font-bold mb-3">
-              <Shield className="h-5 w-5 text-primary" />
+              <img src={logoImg} alt="TrueRes.io logo" className="h-6 w-6" />
               <span>TrueRes<span className="text-primary">.io</span></span>
             </Link>
             <p className="text-sm text-muted-foreground">
