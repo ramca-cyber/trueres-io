@@ -3,6 +3,7 @@ import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -41,6 +42,7 @@ const VideoToAudio = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="rounded-lg border border-border bg-card/50 p-4">
             <p className="text-sm text-muted-foreground">
               Audio will be extracted in its original codec — no re-encoding, no quality loss. This is the fastest and most faithful extraction method.

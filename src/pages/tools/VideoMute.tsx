@@ -4,6 +4,7 @@ import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
@@ -38,6 +39,7 @@ const VideoMute = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="rounded-lg border border-border bg-card/50 p-4 flex items-start gap-3">
             <VolumeX className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div>
@@ -72,6 +74,7 @@ const VideoMute = () => {
                 Audio removed! {formatFileSize(outputBlob.size)}
                 {file && outputBlob.size < file.size && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% smaller)`}
               </p>
+              <VideoPlayer src={outputBlob} label="Output (silent)" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_muted.${ext}`} label="Download silent video" />
             </div>
           )}

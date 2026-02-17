@@ -1,16 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { trimArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Clock } from 'lucide-react';
 
 const tool = getToolById('video-trimmer')!;
 
@@ -18,6 +19,7 @@ const VideoTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
   const [startTime, setStartTime] = useState('0');
   const [endTime, setEndTime] = useState('30');
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -31,6 +33,13 @@ const VideoTrimmer = () => {
     await process(file, inputName, outName, args);
   };
 
+  const setStartToCurrent = () => {
+    if (videoRef.current) setStartTime(videoRef.current.currentTime.toFixed(1));
+  };
+  const setEndToCurrent = () => {
+    if (videoRef.current) setEndTime(videoRef.current.currentTime.toFixed(1));
+  };
+
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'trimmed';
   const ext = file?.name.split('.').pop() || 'mp4';
 
@@ -41,14 +50,25 @@ const VideoTrimmer = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer ref={videoRef} src={file} label="Input video" />
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">Start (seconds)</label>
-              <Input type="number" min="0" step="0.1" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <div className="flex gap-2">
+                <Input type="number" min="0" step="0.1" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+                <Button variant="outline" size="sm" onClick={setStartToCurrent} title="Set to current video time">
+                  <Clock className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">End (seconds)</label>
-              <Input type="number" min="0" step="0.1" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <div className="flex gap-2">
+                <Input type="number" min="0" step="0.1" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+                <Button variant="outline" size="sm" onClick={setEndToCurrent} title="Set to current video time">
+                  <Clock className="h-3.5 w-3.5" />
+                </Button>
+              </div>
             </div>
           </div>
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
@@ -76,6 +96,7 @@ const VideoTrimmer = () => {
                 Video trimmed! {formatFileSize(outputBlob.size)}
                 {file && outputBlob.size < file.size && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% smaller)`}
               </p>
+              <VideoPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_trimmed.${ext}`} label="Download trimmed video" />
             </div>
           )}

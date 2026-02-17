@@ -3,6 +3,7 @@ import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
+import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -39,6 +40,7 @@ const VideoToMp3 = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <VideoPlayer src={file} label="Input video" />
           <div className="space-y-2">
             <label className="text-sm font-medium">MP3 Bitrate</label>
             <Select value={bitrate.toString()} onValueChange={(v) => setBitrate(Number(v))}>

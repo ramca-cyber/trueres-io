@@ -57,7 +57,7 @@ const SweepGenerator = () => {
   const generateWav = useCallback(() => {
     const samples = generateSweep(startFreq, endFreq, duration, 44100, sweepType, amplitude / 100);
     const wavData = encodeWav([samples], 44100);
-    setWavBlob(new Blob([wavData], { type: 'audio/wav' }));
+    setWavBlob(wavData);
   }, [startFreq, endFreq, duration, sweepType, amplitude]);
 
   return (
