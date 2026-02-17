@@ -1,118 +1,110 @@
 
-# Headphone-Focused Tool Expansion
 
-Add **6 new tools** specifically for headphone users and enthusiasts (48 existing -> 54 total).
+# Sidebar Redesign: Better Categories, Featured List, and Icon Coverage
+
+## Problems Identified
+
+1. Featured list has 6 original tools, missing high-engagement new tools (ABX Test, Crossfeed, Ear Training, Soundstage Test)
+2. "Signal Generators and Testing" category has 15 tools -- too many, mixing unrelated tools
+3. Headphone tools are scattered across "generators" and "processing" with no grouping
+4. The `iconMap` in ToolNav.tsx is missing ~15 icons for new tools (they all render as a fallback Search icon)
+5. Tool ordering within categories is arbitrary (insertion order)
+6. No tool count badges on categories
 
 ---
 
-## New Tools
+## Changes
 
-### 1. Crossfeed Simulator (`/crossfeed`)
-**Category:** processing | **Engine:** oscillator
+### 1. Add a new "Headphone" category
 
-The most requested headphone feature. Simulates speaker-like listening by blending a delayed, filtered portion of L into R and vice versa. Reduces the "inside your head" effect.
+Split from generators. Move these 6 tools into a new `headphone` category:
+- Crossfeed Simulator (currently in `processing`)
+- Binaural Beats (currently in `generators`)
+- Soundstage Test (currently in `generators`)
+- Channel Balance (currently in `generators`)
+- Ear Training (currently in `generators`)
+- Headphone Guide (currently in `reference`)
 
-- Load any audio file via existing `FileDropZone`
-- Adjustable crossfeed level (0-100%) and delay (0-600 microseconds)
-- Three presets: Subtle, Natural, Wide (modeled on Meier/Jan Meier crossfeed)
-- Uses `DelayNode` + `BiquadFilterNode` (lowpass) + `GainNode` per channel, routed through a `ChannelSplitterNode` / `ChannelMergerNode`
-- Real-time toggle on/off for instant A/B comparison
-- Playback via `AudioPlayer` component with the crossfeed chain inserted
+New category definition:
+- id: `headphone`
+- label: "Headphone Tools"
+- icon: Headphones
+- color: text-purple-400
 
-### 2. Binaural Beat Generator (`/binaural-beats`)
-**Category:** generators | **Engine:** oscillator
+### 2. Updated category order (6 categories)
 
-Extremely popular and simple to implement. Two `OscillatorNode`s at slightly different frequencies routed to L and R ears.
+1. Audio Analysis and Forensics (14 tools)
+2. Audio Processing (9 tools)
+3. Video Processing (7 tools)
+4. Signal Generators and Testing (9 tools, down from 15)
+5. Headphone Tools (6 tools, new)
+6. Reference and Education (7 tools, down from 8)
 
-- Base frequency slider (100-500 Hz)
-- Beat frequency selector (1-40 Hz) with labeled bands: Delta (1-4), Theta (4-8), Alpha (8-14), Beta (14-30), Gamma (30-40)
-- Optional background noise layer (pink/brown noise from existing generator)
-- Session timer (5-60 min)
-- Volume control with safety limiter
+### 3. Updated Featured list (8 tools)
 
-### 3. Soundstage & Imaging Test (`/soundstage-test`)
-**Category:** generators | **Engine:** oscillator
+Replace the current 6 with a curated 8 that balances traffic drivers and new highlights:
 
-Test how well your headphones render spatial positioning.
+1. Hi-Res Verifier (flagship tool)
+2. LUFS Meter (professional standard)
+3. Spectrogram (visual appeal)
+4. ABX Test (audiophile engagement)
+5. Audio Converter (utility workhorse)
+6. Crossfeed Simulator (headphone highlight)
+7. Video to MP3 (high search volume)
+8. Ear Training (sticky/gamified)
 
-- **Panning test:** Tone sweeps smoothly from hard-left to hard-right using `StereoPannerNode`
-- **Center image test:** Mono tone to evaluate phantom center accuracy
-- **Width test:** Correlated vs decorrelated noise to test perceived width
-- **HRTF 3D test:** Uses Web Audio `PannerNode` with `panningModel: 'HRTF'` to position a tone at virtual positions around the listener (front, rear, above)
-- Visual circle diagram showing current source position
+### 4. Fix all missing icons in iconMap
 
-### 4. Channel Balance / Driver Match Test (`/channel-balance`)
-**Category:** generators | **Engine:** oscillator
+Add these missing icon imports and mappings:
+- `Brain` (Binaural Beats)
+- `Compass` (Soundstage)
+- `Scale` (Channel Balance)
+- `Flame` (Burn-In)
+- `Disc` (Turntable)
+- `CircleDot` (Subwoofer)
+- `Speaker` (Speaker Test)
+- `LayoutGrid` (Surround Reference)
+- `ArrowLeftRight` (dB Converter)
+- `Clock` (Listening Monitor)
+- `Shuffle` (ABX Test)
+- `TriangleAlert` (Clipping Detector)
+- `Mic` (Room Analyzer)
+- `Binary` (Bit-Perfect)
+- `Play` (Media Player)
 
-Check if your headphone drivers are matched in volume and frequency response.
+### 5. Add tool count badges to category headers
 
-- Plays pink noise or tone alternating L/R rapidly (200ms intervals) to detect imbalance
-- User adjustable balance slider to compensate and find the center
-- Multi-frequency check: tests at 100Hz, 1kHz, 4kHz, 10kHz to catch frequency-dependent imbalance
-- Reports perceived offset in dB
-- Simple pass/fail per frequency band
+Show the number of tools per category next to the label, e.g., "Audio Analysis (14)".
 
-### 5. EQ Ear Training (`/ear-training`)
-**Category:** generators | **Engine:** oscillator
+### 6. Sort tools alphabetically within each category
 
-Learn to identify frequency bands by ear -- essential for mixing and critical listening.
-
-- Plays pink noise or music (loaded via `FileDropZone`)
-- Randomly boosts one frequency band by +6/+12 dB using `BiquadFilterNode` (peaking)
-- User guesses which band was boosted from options (Sub, Bass, Low-Mid, Mid, Upper-Mid, Presence, Air)
-- Tracks score across rounds
-- Difficulty levels: Easy (3 bands), Medium (5 bands), Hard (8 bands, narrower Q)
-
-### 6. Headphone Comparison Guide (`/headphone-guide`)
-**Category:** reference | **Engine:** none
-
-Static reference page for headphone enthusiasts.
-
-- Headphone types explained: open-back, closed-back, planar magnetic, electrostatic, IEM
-- Impedance and sensitivity guide (what needs an amp)
-- DAC/amp pairing recommendations by impedance ranges
-- Common target curves explained (Harman, Diffuse Field, Free Field)
-- EQ tips for popular headphones
+Currently tools appear in insertion order. Sorting alphabetically by `shortName` makes scanning faster.
 
 ---
 
 ## Technical Details
 
-### Files to Create (6)
-- `src/pages/tools/CrossfeedSimulator.tsx`
-- `src/pages/tools/BinauralBeats.tsx`
-- `src/pages/tools/SoundstageTest.tsx`
-- `src/pages/tools/ChannelBalance.tsx`
-- `src/pages/tools/EarTraining.tsx`
-- `src/pages/tools/HeadphoneGuide.tsx`
+### Files Modified
 
-### Files to Modify
-- `src/config/tool-registry.ts` -- 6 new tool definitions
-- `src/App.tsx` -- 6 lazy imports + routes
-- `public/sitemap.xml` -- 6 new URLs
-- `src/config/tool-faqs.ts` -- FAQ entries for new tools
+**`src/types/tools.ts`**
+- Add `'headphone'` to the `ToolCategory` union type
+- Add the new category entry to `TOOL_CATEGORIES` array (position 5, before reference)
 
-### No New Dependencies
-All tools use existing Web Audio API nodes:
-- `ChannelSplitterNode` / `ChannelMergerNode` (crossfeed)
-- `StereoPannerNode` / `PannerNode` with HRTF (soundstage)
-- `BiquadFilterNode` (crossfeed lowpass, ear training peaking EQ)
-- `OscillatorNode` / `GainNode` (binaural beats, channel balance)
-- Existing `FileDropZone`, `AudioPlayer`, `ToolPage`, `Slider`, `Button` components
+**`src/config/tool-registry.ts`**
+- Change `category` field for 6 tools from their current categories to `'headphone'`
+  - `crossfeed`: `processing` -> `headphone`
+  - `binaural-beats`: `generators` -> `headphone`
+  - `soundstage-test`: `generators` -> `headphone`
+  - `channel-balance`: `generators` -> `headphone`
+  - `ear-training`: `generators` -> `headphone`
+  - `headphone-guide`: `reference` -> `headphone`
 
-### Crossfeed Audio Graph
-```text
-FileSource -> ChannelSplitter(2)
-  Splitter[0] (L) -> LowpassFilter -> DelayNode -> CrossfeedGain -> Merger[1] (R)
-  Splitter[1] (R) -> LowpassFilter -> DelayNode -> CrossfeedGain -> Merger[0] (L)
-  Splitter[0] (L) -> DirectGain -> Merger[0] (L)
-  Splitter[1] (R) -> DirectGain -> Merger[1] (R)
-Merger -> Destination
-```
+**`src/components/layout/ToolNav.tsx`**
+- Update `FEATURED_IDS` array to the new 8-item list
+- Add all 15 missing icons to the import statement and `iconMap`
+- Add `Headphones` to `categoryIcons`
+- Add tool count badge in the category trigger: `({tools.length})`
+- Sort tools alphabetically before rendering: `tools.sort((a, b) => a.shortName.localeCompare(b.shortName))`
 
-### Build Order
-1. Binaural Beats, Channel Balance (simplest oscillator patterns)
-2. Soundstage Test (StereoPanner + HRTF PannerNode)
-3. Crossfeed Simulator (most complex audio graph)
-4. Ear Training (needs file loading + random EQ)
-5. Headphone Guide (static content, fastest to write)
+**`src/pages/Index.tsx`**
+- The homepage "All Tools" grid reads from `TOOL_CATEGORIES` and `TOOLS` dynamically, so it will automatically pick up the new headphone category -- no changes needed there.
