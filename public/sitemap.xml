@@ -58,4 +58,11 @@
   <url><loc>https://trueres.io/room-analyzer</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://trueres.io/ir-viewer</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://trueres.io/bit-perfect-test</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- Headphone Tools -->
+  <url><loc>https://trueres.io/crossfeed</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/binaural-beats</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/soundstage-test</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/channel-balance</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/ear-training</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://trueres.io/headphone-guide</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>
