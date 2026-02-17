@@ -7,16 +7,20 @@ import { VideoPlayer } from '@/components/shared/VideoPlayer';
 import { PlaylistPanel, QueueItem } from '@/components/shared/PlaylistPanel';
 import { MetadataDisplay } from '@/components/shared/MetadataDisplay';
 import { LiveSpectrum } from '@/components/shared/LiveSpectrum';
+import { LiveSpectrogram } from '@/components/shared/LiveSpectrogram';
+import { WaveformSeekbar } from '@/components/shared/WaveformSeekbar';
+import { ABLoopControls } from '@/components/shared/ABLoopControls';
 import { ToolActionGrid } from '@/components/shared/ToolActionGrid';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { ALL_MEDIA_ACCEPT, formatFileSize } from '@/config/constants';
 import {
-  RotateCcw, Play, AlertTriangle, RefreshCw,
+  RotateCcw, AlertTriangle, RefreshCw,
   SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Music, Film, Minimize2, BarChart3,
   Timer, TimerOff, Download, Upload, AudioLines, VideoOff,
+  Waves,
 } from 'lucide-react';
 import { processFile, getFFmpeg } from '@/engines/processing/ffmpeg-manager';
 import { useMiniPlayerStore } from '@/stores/mini-player-store';
@@ -128,6 +132,7 @@ export default function MediaPlayer() {
   const [autoPlay, setAutoPlay] = useState(false);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const [showSpectrum, setShowSpectrum] = useState(true);
+  const [showSpectrogram, setShowSpectrogram] = useState(false);
 
   // Phase 3 state
   const [crossfadeSec, setCrossfadeSec] = useState(0); // 0 = off, 1-5
@@ -138,6 +143,11 @@ export default function MediaPlayer() {
   const [audioOnlyMode, setAudioOnlyMode] = useState(false);
   const [extractingAudio, setExtractingAudio] = useState(false);
   const [extractProgress, setExtractProgress] = useState(-1);
+
+  // Pre-buffer next track for gapless
+  const nextAudioRef = useRef<HTMLAudioElement | null>(null);
+  const nextUrlRef = useRef<string>('');
+  const crossfadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -233,6 +243,68 @@ export default function MediaPlayer() {
     const next = fromIndex + 1;
     return next >= queue.length ? (loopMode === 'all' ? 0 : null) : next;
   }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
+
+  // ── Pre-buffer next track for gapless ──
+  useEffect(() => {
+    const nextIdx = getNextIndex(currentIndex);
+    if (nextIdx === null) return;
+    const nextTrack = queue[nextIdx];
+    if (!nextTrack || nextTrack.status !== 'ready' || !nextTrack.playbackSrc || nextTrack.isVideo) return;
+
+    if (nextUrlRef.current) URL.revokeObjectURL(nextUrlRef.current);
+    const u = URL.createObjectURL(nextTrack.playbackSrc);
+    nextUrlRef.current = u;
+
+    if (!nextAudioRef.current) nextAudioRef.current = new Audio();
+    nextAudioRef.current.src = u;
+    nextAudioRef.current.preload = 'auto';
+    nextAudioRef.current.load();
+
+    return () => {
+      if (nextUrlRef.current) { URL.revokeObjectURL(nextUrlRef.current); nextUrlRef.current = ''; }
+    };
+  }, [currentIndex, queue, getNextIndex]);
+
+  // ── Crossfade logic ──
+  useEffect(() => {
+    if (crossfadeSec <= 0) return;
+    const el = audioRef.current;
+    if (!el) return;
+
+    let fading = false;
+    const checkCrossfade = () => {
+      if (fading || !el.duration || !isFinite(el.duration)) return;
+      const remaining = el.duration - el.currentTime;
+      if (remaining <= crossfadeSec && remaining > 0 && nextAudioRef.current?.src) {
+        fading = true;
+        const fadeInterval = 50;
+        const steps = (crossfadeSec * 1000) / fadeInterval;
+        let step = 0;
+        const startVol = el.volume;
+        const nextEl = nextAudioRef.current;
+        nextEl.volume = 0;
+        nextEl.play().catch(() => {});
+
+        if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current);
+        crossfadeTimerRef.current = setInterval(() => {
+          step++;
+          const t = step / steps;
+          el.volume = Math.max(0, startVol * (1 - t));
+          nextEl.volume = Math.min(1, t);
+          if (step >= steps) {
+            clearInterval(crossfadeTimerRef.current!);
+            crossfadeTimerRef.current = null;
+          }
+        }, fadeInterval);
+      }
+    };
+
+    el.addEventListener('timeupdate', checkCrossfade);
+    return () => {
+      el.removeEventListener('timeupdate', checkCrossfade);
+      if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current);
+    };
+  }, [crossfadeSec]);
 
   const getPrevIndex = useCallback((fromIndex: number): number | null => {
     if (shuffleOn && shuffleOrder.length === queue.length) {
@@ -445,9 +517,22 @@ export default function MediaPlayer() {
                 )}
               </div>
 
+              {/* Waveform seekbar for audio */}
+              {isAudioTrack && (
+                <div className="px-4 pb-2">
+                  <WaveformSeekbar audioElement={audioRef.current} height={48} />
+                </div>
+              )}
+
               {isAudioTrack && showSpectrum && analyserNode && (
-                <div className="px-4 pb-4">
+                <div className="px-4 pb-2">
                   <LiveSpectrum analyserNode={analyserNode} height={48} barCount={64} />
+                </div>
+              )}
+
+              {isAudioTrack && showSpectrogram && analyserNode && (
+                <div className="px-4 pb-4">
+                  <LiveSpectrogram analyserNode={analyserNode} height={80} />
                 </div>
               )}
             </div>
@@ -490,6 +575,15 @@ export default function MediaPlayer() {
                 className={cn('h-8 w-8 p-0', showSpectrum && 'text-primary bg-primary/10')}
                 title="Toggle spectrum">
                 <BarChart3 className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Spectrogram toggle */}
+            {isAudioTrack && current?.status === 'ready' && (
+              <Button variant="ghost" size="sm" onClick={() => setShowSpectrogram(s => !s)}
+                className={cn('h-8 w-8 p-0', showSpectrogram && 'text-primary bg-primary/10')}
+                title="Toggle spectrogram">
+                <Waves className="h-4 w-4" />
               </Button>
             )}
 
@@ -564,6 +658,13 @@ export default function MediaPlayer() {
               </Button>
             )}
           </div>
+
+          {/* A-B Loop */}
+          {current?.status === 'ready' && (
+            <div className="flex justify-center">
+              <ABLoopControls audioElement={isAudioTrack ? audioRef.current : videoRef.current} />
+            </div>
+          )}
 
           {/* ── Playlist panel ── */}
           <PlaylistPanel queue={queue} currentIndex={currentIndex} onSelect={handleSelect}

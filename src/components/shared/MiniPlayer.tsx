@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMiniPlayerStore } from '@/stores/mini-player-store';
 import { formatFileSize } from '@/config/constants';
-import { Play, Pause, X, SkipForward, SkipBack, Maximize2, Music, Film } from 'lucide-react';
+import { Play, Pause, X, SkipForward, SkipBack, Maximize2, Music, Film, Volume2, VolumeX, Shuffle, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
 
 function formatTime(s: number): string {
@@ -18,6 +19,12 @@ export function MiniPlayer() {
   const navigate = useNavigate();
   const audioRef = useRef<HTMLAudioElement>(null);
   const [url, setUrl] = useState('');
+  const [volume, setVolume] = useState(1);
+  const [muted, setMuted] = useState(false);
+  const [shuffle, setShuffle] = useState(false);
+  const [loop, setLoop] = useState(false);
+  const [seeking, setSeeking] = useState(false);
+  const [seekValue, setSeekValue] = useState(0);
 
   const current = queue[currentIndex];
 
@@ -37,13 +44,31 @@ export function MiniPlayer() {
     else el.pause();
   }, [isPlaying, url]);
 
+  // Volume
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
+  }, [volume, muted]);
+
   // Time update
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
-    const onTime = () => setTime(el.currentTime, el.duration || 0);
+    const onTime = () => {
+      if (!seeking) setTime(el.currentTime, el.duration || 0);
+    };
     const onEnded = () => {
-      const next = currentIndex + 1;
+      if (loop) {
+        el.currentTime = 0;
+        el.play();
+        return;
+      }
+      let next: number;
+      if (shuffle) {
+        const remaining = Array.from({ length: queue.length }, (_, i) => i).filter(i => i !== currentIndex);
+        next = remaining.length > 0 ? remaining[Math.floor(Math.random() * remaining.length)] : 0;
+      } else {
+        next = currentIndex + 1;
+      }
       if (next < queue.length) {
         setCurrentIndex(next);
         setPlaying(true);
@@ -63,17 +88,36 @@ export function MiniPlayer() {
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
     };
-  }, [currentIndex, queue.length, setTime, setCurrentIndex, setPlaying]);
+  }, [currentIndex, queue.length, setTime, setCurrentIndex, setPlaying, seeking, shuffle, loop]);
+
+  const handleSeekChange = useCallback(([v]: number[]) => {
+    setSeeking(true);
+    setSeekValue(v);
+  }, []);
+
+  const handleSeekCommit = useCallback(([v]: number[]) => {
+    if (audioRef.current && duration > 0) {
+      audioRef.current.currentTime = (v / 100) * duration;
+    }
+    setSeeking(false);
+  }, [duration]);
 
   if (!active || !current) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const displayProgress = seeking ? seekValue : progress;
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
-      {/* Progress bar */}
-      <div className="h-0.5 bg-secondary w-full">
-        <div className="h-full bg-primary transition-all duration-200" style={{ width: `${progress}%` }} />
+      {/* Seek bar */}
+      <div className="px-4 pt-1.5 max-w-screen-xl mx-auto">
+        <Slider
+          min={0} max={100} step={0.1}
+          value={[displayProgress]}
+          onValueChange={handleSeekChange}
+          onValueCommit={handleSeekCommit}
+          className="h-1"
+        />
       </div>
 
       <div className="flex items-center gap-3 px-4 py-2 max-w-screen-xl mx-auto">
@@ -93,8 +137,25 @@ export function MiniPlayer() {
           </p>
         </div>
 
+        {/* Volume */}
+        <div className="hidden sm:flex items-center gap-1.5 min-w-[100px]">
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setMuted(m => !m)}>
+            {muted || volume === 0 ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
+          </Button>
+          <Slider min={0} max={1} step={0.01} value={[muted ? 0 : volume]}
+            onValueChange={([v]) => { setVolume(v); if (v > 0) setMuted(false); }}
+            className="flex-1" />
+        </div>
+
         {/* Controls */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-0.5">
+          {queue.length > 1 && (
+            <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', shuffle && 'text-primary')}
+              onClick={() => setShuffle(s => !s)} title="Shuffle">
+              <Shuffle className="h-3 w-3" />
+            </Button>
+          )}
+
           {queue.length > 1 && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
               onClick={() => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); }}>
@@ -113,6 +174,11 @@ export function MiniPlayer() {
               <SkipForward className="h-3.5 w-3.5" />
             </Button>
           )}
+
+          <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', loop && 'text-primary')}
+            onClick={() => setLoop(l => !l)} title="Loop">
+            <Repeat className="h-3 w-3" />
+          </Button>
 
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
             onClick={() => navigate('/media-player')} title="Open full player">
