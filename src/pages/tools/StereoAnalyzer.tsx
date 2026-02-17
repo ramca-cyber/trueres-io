@@ -4,6 +4,7 @@ import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
+import { CorrelationMeter } from '@/components/visualizations/CorrelationMeter';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
@@ -41,32 +42,47 @@ const StereoAnalyzer = () => {
           {analyzing && !stereo && <ProgressBar value={50} label="Analyzing stereo field..." />}
 
           {stereo && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <MetricCard
-                label="Correlation"
-                value={stereo.correlation.toFixed(3)}
-                subtext={stereo.correlation > 0.5 ? 'Good mono compat' : stereo.correlation > 0 ? 'Moderate' : 'Poor mono compat'}
-                status={stereo.correlation > 0.5 ? 'pass' : stereo.correlation > 0 ? 'warn' : 'fail'}
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <MetricCard
+                  label="Correlation"
+                  value={stereo.correlation.toFixed(3)}
+                  subtext={stereo.correlation > 0.5 ? 'Good mono compat' : stereo.correlation > 0 ? 'Moderate' : 'Poor mono compat'}
+                  status={stereo.correlation > 0.5 ? 'pass' : stereo.correlation > 0 ? 'warn' : 'fail'}
+                />
+                <MetricCard
+                  label="Stereo Width"
+                  value={`${(stereo.stereoWidth * 100).toFixed(0)}%`}
+                  subtext={stereo.stereoWidth < 0.1 ? 'Near-mono' : stereo.stereoWidth > 0.5 ? 'Very wide' : 'Normal'}
+                  status="info"
+                />
+                <MetricCard
+                  label="Mid Energy"
+                  value={`${(stereo.midEnergy * 100).toFixed(0)}%`}
+                  subtext="Center channel energy"
+                  status="neutral"
+                />
+                <MetricCard
+                  label="Side Energy"
+                  value={`${(stereo.sideEnergy * 100).toFixed(0)}%`}
+                  subtext="Difference channel energy"
+                  status="neutral"
+                />
+                <MetricCard
+                  label="Mono Loss"
+                  value={`${stereo.monoCompatibilityLoss.toFixed(1)}%`}
+                  subtext="Energy lost in mono sum"
+                  status={stereo.monoCompatibilityLoss > 10 ? 'warn' : 'pass'}
+                />
+              </div>
+
+              <CorrelationMeter
+                correlation={stereo.correlation}
+                stereoWidth={stereo.stereoWidth}
+                midEnergy={stereo.midEnergy}
+                sideEnergy={stereo.sideEnergy}
               />
-              <MetricCard
-                label="Stereo Width"
-                value={`${(stereo.stereoWidth * 100).toFixed(0)}%`}
-                subtext={stereo.stereoWidth < 0.1 ? 'Near-mono' : stereo.stereoWidth > 0.5 ? 'Very wide' : 'Normal'}
-                status="info"
-              />
-              <MetricCard
-                label="Mid Energy"
-                value={`${(stereo.midEnergy * 100).toFixed(0)}%`}
-                subtext="Center channel energy"
-                status="neutral"
-              />
-              <MetricCard
-                label="Mono Loss"
-                value={`${stereo.monoCompatibilityLoss.toFixed(1)}%`}
-                subtext="Energy lost in mono sum"
-                status={stereo.monoCompatibilityLoss > 10 ? 'warn' : 'pass'}
-              />
-            </div>
+            </>
           )}
 
           <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
