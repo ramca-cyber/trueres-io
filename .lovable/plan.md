@@ -1,174 +1,73 @@
 
 
-# Comprehensive Visualization Controls System
+# Fix: Visualization Controls -- Fullscreen Skewing, Cursor Jank, and UX Issues
 
-## Problem
+## Problems Identified
 
-All visualization canvases are static images with no direct interaction. The WaveformViewer has external zoom buttons that slice data, but there's no panning, no cursor inspection, no mouse-driven zoom, and no consistency across tools.
+### 1. Fullscreen stretching/skewing
+All canvas components (SpectrogramCanvas, WaveformCanvas, SpectrumCanvas, etc.) use hardcoded dimensions (`width=900, height=400`). The CSS class `w-full` stretches the canvas element visually to fill its container, but the internal pixel buffer stays at 900x400. When entering fullscreen, the canvas stretches to fill the entire screen at the wrong aspect ratio, producing distortion.
 
-## Design Approach
+**Fix**: Use a `ResizeObserver` inside each canvas component to match the canvas pixel buffer to its actual rendered size. Remove the hardcoded `width`/`height` props entirely.
 
-Instead of adding more buttons (left/right/up/down), the right UX is **direct manipulation on the canvas itself** -- this is the standard in every audio/spectrum tool (Audacity, Spek, iZotope, REW). Users expect:
+### 2. Cursor readout causes jarring layout shifts
+Every mouse move updates `cursor` state in `useVizViewport`, which triggers a React re-render of the entire page. The cursor readout string is computed in a `useMemo` and displayed in the `VizToolbar`. Because the text length changes (e.g., "1.23s / 440 Hz" vs "12.34s / 1.2 kHz"), the toolbar layout shifts on every frame. This also means the entire spectrogram is re-rendered on every mouse move.
 
-- **Scroll wheel** to zoom (centered on cursor position)
-- **Click + drag** to pan
-- **Crosshair cursor** with readout (frequency, time, amplitude, dB at cursor)
-- **Double-click** to reset view
-- **Pinch** to zoom on touch devices
+**Fix**: 
+- Stop storing cursor in React state. Use a ref instead.
+- Draw the crosshair and readout text directly on the canvas (as an overlay layer), not in the toolbar. This avoids any React re-renders from mouse movement.
+- Remove the `cursorReadout` prop from VizToolbar entirely -- the canvas handles it.
 
-Combined with a small **toolbar** for things you can't do with mouse gestures: fullscreen, PNG export, colormap, toggle overlays.
+### 3. Pan math has dead code and potential bugs
+In `useVizViewport`, the `onMouseMove` handler computes `newOffX`/`newOffY` on lines 142-143 but never uses them, then recomputes on lines 146-152. The unused computation is confusing and the closure captures stale `viewX`/`viewY` values during drag sequences.
 
-## Architecture: Two New Pieces
+**Fix**: Clean up the pan handler to use only one correct calculation, and use refs for current axis state to avoid stale closures.
 
-### 1. `useVizViewport` hook -- manages viewport state and canvas interaction
+### 4. Memory leak -- global mouseup listener
+Lines 237-242 of `useVizViewport` add a `window.addEventListener('mouseup', ...)` but never remove it. This leaks every time the hook re-mounts.
 
-A single reusable hook that any canvas component can adopt. It manages:
+**Fix**: Move this into a proper `useEffect` with cleanup.
 
-```
-State:
-  - viewX: { offset: 0..1, zoom: 1..maxZoom }   (horizontal viewport)
-  - viewY: { offset: 0..1, zoom: 1..maxZoom }   (vertical viewport)
-  - cursor: { x, y } | null                      (current mouse position in data coords)
+## Technical Changes
 
-Interactions (attached to canvas element):
-  - onWheel: zoom X axis (shift+wheel = zoom Y axis) centered on cursor
-  - onMouseDown + onMouseMove: pan in zoomed view
-  - onMouseMove (no button): update cursor crosshair position
-  - onDoubleClick: reset to full view
-  - onTouchStart/Move/End: pinch-to-zoom + drag-to-pan
+### `src/hooks/use-viz-viewport.ts` (rewrite)
+- Replace `cursor` React state (`useState`) with a `cursorRef` (`useRef`). The hook no longer returns a `cursor` object that triggers re-renders.
+- Instead, expose a `getCursor()` function and a `cursorRef` that canvas components can read during their paint loop.
+- Fix pan math: remove dead code on lines 142-143, use functional state updates with refs to avoid stale closures during drag.
+- Wrap the global `mouseup` listener in a `useEffect` with proper cleanup (`removeEventListener` on unmount).
+- Remove `cursor` from the return type; add `cursorRef` instead.
 
-Output:
-  - viewport: { xMin, xMax, yMin, yMax } in normalized 0-1 coords
-  - cursor: data coordinates under mouse
-  - canvasHandlers: { onWheel, onMouseDown, ... } to spread onto canvas
-  - reset(): return to default view
-  - zoomIn/zoomOut/panLeft/panRight: for toolbar buttons (accessibility)
-```
+### `src/components/shared/VizToolbar.tsx`
+- Remove the `cursorReadout` prop. The toolbar no longer displays live cursor coordinates (this eliminates the layout jank entirely).
+- The readout is now drawn directly on the canvas by each canvas component.
 
-The hook does NOT render anything -- it just provides state and handlers. Each canvas component uses the viewport to decide what slice of data to render.
+### `src/components/visualizations/SpectrogramCanvas.tsx`
+- Remove `width`/`height` props. Add a `ResizeObserver` that reads the canvas element's `clientWidth`/`clientHeight` and sets `canvas.width`/`canvas.height` to match (accounting for `devicePixelRatio` for sharp rendering).
+- Read cursor position from `cursorRef` instead of a `cursor` prop. Draw the crosshair and a small text overlay (time/freq) directly on the canvas at the cursor position -- this is purely a paint operation, no React re-render.
+- Remove `cursor` from the `useEffect` dependency array so mouse movement does not trigger a full repaint. Instead, use a lightweight `requestAnimationFrame` loop or a second overlay canvas for the crosshair only.
 
-### 2. `VizToolbar` component -- settings + accessibility buttons
+### `src/components/visualizations/WaveformCanvas.tsx`
+- Same ResizeObserver pattern for responsive sizing.
+- Read cursor from ref, draw crosshair on canvas.
+- Remove `cursor` from effect deps.
 
-A compact toolbar rendered above the canvas. Renders only the controls relevant to each viz (all opt-in via props):
+### `src/components/visualizations/SpectrumCanvas.tsx`
+- Same ResizeObserver pattern.
+- Read cursor from ref, draw crosshair on canvas.
 
-- **Zoom controls**: +/- buttons and reset (for keyboard/accessibility, mirrors wheel behavior)
-- **Cursor readout**: shows live values at cursor position (e.g., "1.2 kHz / -42 dB")
-- **dB range**: min/max sliders (spectrum, spectrogram)
-- **Colormap**: dropdown (spectrogram only)
-- **Toggles**: ceiling line, Nyquist, octave bands, etc.
-- **Fullscreen**: expand canvas container via Fullscreen API
-- **Download PNG**: canvas.toBlob() export
+### `src/components/visualizations/LoudnessHistoryCanvas.tsx`
+- Same ResizeObserver pattern.
+- Read cursor from ref, draw crosshair on canvas.
 
-## Per-Visualization Behavior
+### `src/pages/tools/SpectrogramViewer.tsx`
+- Remove `cursorReadout` computation and its prop from VizToolbar.
+- Pass a `cursorLabel` callback to SpectrogramCanvas so the canvas can format the readout text itself (e.g., a function that takes `(dataX, dataY)` and returns `"1.23s / 4.2 kHz"`).
 
-### Waveform (WaveformCanvas, WaveformViewer, IRViewer waveform)
-- **X axis**: Time. Wheel zooms time, drag pans horizontally.
-- **Y axis**: Amplitude (-1 to +1). No Y zoom needed (fixed range).
-- **Cursor readout**: "0.42s / -12.3 dBFS"
-- **Crosshair**: vertical line at cursor time position
+### All other tool pages using VizToolbar
+- Remove `cursorReadout` prop from VizToolbar usage (WaveformViewer, SpectrumAnalyzer, FreqResponse, LufsMeter, IRViewer).
+- Pass cursor label formatter to their respective canvas components.
 
-### Spectrum / Frequency Response (SpectrumCanvas, FreqResponse, IRViewer freq)
-- **X axis**: Frequency (log scale, 20 Hz - Nyquist). Wheel zooms frequency range, drag pans.
-- **Y axis**: Magnitude (dB). Shift+wheel zooms dB range, or use toolbar sliders.
-- **Cursor readout**: "2.4 kHz / -38 dB"
-- **Crosshair**: vertical + horizontal lines at cursor
-
-### Spectrogram (SpectrogramCanvas)
-- **X axis**: Time. Wheel zooms time, drag pans horizontally.
-- **Y axis**: Frequency. Shift+wheel zooms frequency range, drag pans vertically.
-- **Cursor readout**: "1.3s / 4.2 kHz / -65 dB"
-- **Crosshair**: both axes
-
-### Loudness History (LoudnessHistoryCanvas)
-- **X axis**: Time. Wheel zooms, drag pans.
-- **Y axis**: LUFS. Shift+wheel zooms LUFS range.
-- **Cursor readout**: "12s / -14.2 LUFS"
-- **Crosshair**: vertical line + horizontal line
-
-## Implementation Plan
-
-### New Files (2)
-
-**`src/hooks/use-viz-viewport.ts`**
-- Manages viewX/viewY state (offset + zoom)
-- Returns viewport bounds in normalized 0-1 coordinates
-- Returns cursor position in data coordinates
-- Provides event handlers to attach to canvas
-- Handles wheel zoom (zoom toward cursor), drag pan, pinch-to-zoom, double-click reset
-- Configurable: lock Y axis (waveform), set max zoom, set axis types (linear vs log)
-
-**`src/components/shared/VizToolbar.tsx`**
-- Renders a row of controls above the canvas
-- Slots: zoom buttons, cursor readout, dB range sliders, colormap select, toggle switches, fullscreen button, download button
-- All slots are opt-in via props
-- Responsive: collapses into a compact layout on mobile
-
-### Modified Canvas Components (4)
-
-**`src/components/visualizations/WaveformCanvas.tsx`**
-- Accept `viewport` prop (from useVizViewport)
-- Accept `onCursorMove` callback
-- Render only the visible slice of peaks/rms based on viewport.xMin/xMax
-- Draw crosshair at cursor position
-- Spread canvas interaction handlers from the hook
-
-**`src/components/visualizations/SpectrumCanvas.tsx`**
-- Accept `viewport` prop
-- Map viewport.xMin/xMax to frequency range (log scale)
-- Map viewport.yMin/yMax to dB range (replaces hardcoded -100..0)
-- Draw crosshair at cursor position
-
-**`src/components/visualizations/SpectrogramCanvas.tsx`**
-- Accept `viewport` prop
-- Render only the visible time/frequency window
-- Draw crosshair at cursor position
-
-**`src/components/visualizations/LoudnessHistoryCanvas.tsx`**
-- Accept `viewport` prop
-- Render only the visible time/LUFS window
-- Draw crosshair at cursor position
-
-### Modified Tool Pages (6)
-
-Each page instantiates `useVizViewport` and passes the viewport + handlers to its canvas, and renders `VizToolbar` above it.
-
-**`src/pages/tools/WaveformViewer.tsx`**
-- Replace custom zoom buttons with VizToolbar + useVizViewport
-- Remove ZOOM_LEVELS array and manual data slicing
-
-**`src/pages/tools/SpectrumAnalyzer.tsx`**
-- Add VizToolbar + useVizViewport (currently has zero controls)
-
-**`src/pages/tools/FreqResponse.tsx`**
-- Add VizToolbar + useVizViewport (currently has zero controls)
-
-**`src/pages/tools/SpectrogramViewer.tsx`**
-- Move existing colormap/dB/toggle controls into VizToolbar
-- Add useVizViewport for zoom+pan on both axes
-
-**`src/pages/tools/LufsMeter.tsx`**
-- Add VizToolbar + useVizViewport for the LoudnessHistoryCanvas
-
-**`src/pages/tools/IRViewer.tsx`**
-- Both canvases get useVizViewport + VizToolbar
-- Bonus: refactor raw canvas drawing to use WaveformCanvas/SpectrumCanvas components for consistency
-
-## Interaction Summary Table
-
-```text
-                    Wheel     Shift+Wheel   Drag      Cursor         Double-click
-Waveform            Zoom X    (nothing)     Pan X     time, dBFS     Reset
-Spectrum            Zoom X    Zoom Y        Pan X+Y   freq, dB       Reset
-Freq Response       Zoom X    Zoom Y        Pan X+Y   freq, dB       Reset
-Spectrogram         Zoom X    Zoom Y        Pan X+Y   time,freq,dB   Reset
-Loudness History    Zoom X    Zoom Y        Pan X+Y   time, LUFS     Reset
-```
-
-## What This Replaces
-
-- WaveformViewer's custom zoom buttons (ZoomIn/ZoomOut/RotateCcw + ZOOM_LEVELS array)
-- SpectrogramViewer's inline dB sliders and toggle controls
-- SpectrumCanvas's hardcoded -100..0 dB range
-
-Everything moves into the unified VizToolbar + useVizViewport system.
-
+## Result
+- Fullscreen works perfectly -- canvas resolution always matches container size.
+- Zero layout jank from mouse movement -- crosshair is drawn on canvas, not in React DOM.
+- Clean, correct pan/zoom math with no memory leaks.
+- Same toolbar for settings (zoom buttons, dB range, colormap, toggles, fullscreen, download) but without the flickering readout.
