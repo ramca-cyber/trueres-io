@@ -15,7 +15,7 @@ const tool = getToolById('metadata-stripper')!;
 
 const MetadataStripper = () => {
   const [file, setFile] = useState<File | null>(null);
-  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -25,7 +25,7 @@ const MetadataStripper = () => {
     const outName = `stripped.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = stripMetadataArgs(inputName, outName);
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'stripped';
@@ -51,7 +51,7 @@ const MetadataStripper = () => {
           </div>
 
           {processing && <ProgressBar value={progress} label="Stripping metadata..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
           <div className="flex gap-3">
             <Button onClick={handleStrip} disabled={processing || loading}>

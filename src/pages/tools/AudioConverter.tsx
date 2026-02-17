@@ -18,7 +18,7 @@ const AudioConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [outputFormat, setOutputFormat] = useState('mp3');
   const [bitrate, setBitrate] = useState(320);
-  const { process, processing, progress, outputBlob, outputFileName, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => {
     setFile(f);
@@ -31,7 +31,7 @@ const AudioConverter = () => {
     const outName = `output.${fmt?.ext || 'mp3'}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = audioConvertArgs(inputName, outName, outputFormat, bitrate);
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
@@ -74,7 +74,7 @@ const AudioConverter = () => {
           </div>
 
           {processing && <ProgressBar value={progress} label="Converting..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
           <div className="flex gap-3">
             <Button onClick={handleConvert} disabled={processing || loading}>

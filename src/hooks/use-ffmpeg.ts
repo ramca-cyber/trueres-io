@@ -26,6 +26,7 @@ export function useFFmpeg() {
   const process = useCallback(
     async (
       inputFile: File,
+      inputName: string,
       outputName: string,
       args: string[],
     ): Promise<Blob | null> => {
@@ -52,7 +53,7 @@ export function useFFmpeg() {
       store.clearOutput();
 
       try {
-        const blob = await processFile(inputFile, args[1] || `input_${inputFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`, outputName, args, (p) => {
+        const blob = await processFile(inputFile, inputName, outputName, args, (p) => {
           store.setProgress(p);
         });
         store.setOutput(blob, outputName);
