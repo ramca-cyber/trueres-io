@@ -1,25 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
+import { InteractiveWaveform } from '@/components/shared/InteractiveWaveform';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { useAudioPreview } from '@/hooks/use-audio-preview';
 import { trimArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Play, Square } from 'lucide-react';
 
 const tool = getToolById('audio-trimmer')!;
 
 const AudioTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
-  const [startTime, setStartTime] = useState('0');
-  const [endTime, setEndTime] = useState('30');
+  const [startTime, setStartTime] = useState(0);
+  const [endTime, setEndTime] = useState(30);
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { audioBuffer, duration, isPlaying, currentTime, decoding, playRegion, stop, seekTo } = useAudioPreview(file);
+
+  // Auto-set end time to file duration when decoded
+  useEffect(() => {
+    if (duration > 0) {
+      setEndTime(duration);
+    }
+  }, [duration]);
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -28,8 +38,13 @@ const AudioTrimmer = () => {
     const ext = file.name.split('.').pop() || 'mp3';
     const outName = `trimmed.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = trimArgs(inputName, outName, parseFloat(startTime), parseFloat(endTime));
+    const args = trimArgs(inputName, outName, startTime, endTime);
     await process(file, inputName, outName, args);
+  };
+
+  const handlePreview = () => {
+    if (isPlaying) { stop(); return; }
+    playRegion(startTime, endTime);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'trimmed';
@@ -42,28 +57,67 @@ const AudioTrimmer = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
-          <AudioPlayer src={file} label="Input" />
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Start (seconds)</label>
-              <Input type="number" min="0" step="0.1" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+          {decoding && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Decoding audio...
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">End (seconds)</label>
-              <Input type="number" min="0" step="0.1" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
-            </div>
-          </div>
+          )}
+
+          {audioBuffer && (
+            <>
+              <InteractiveWaveform
+                audioBuffer={audioBuffer}
+                startTime={startTime}
+                endTime={endTime}
+                onStartChange={setStartTime}
+                onEndChange={setEndTime}
+                currentTime={currentTime}
+                onSeek={seekTo}
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">Start (seconds)</label>
+                  <Input
+                    type="number" min="0" max={endTime - 0.1} step="0.1"
+                    value={startTime.toFixed(1)}
+                    onChange={(e) => setStartTime(Math.max(0, parseFloat(e.target.value) || 0))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">End (seconds)</label>
+                  <Input
+                    type="number" min={startTime + 0.1} max={duration} step="0.1"
+                    value={endTime.toFixed(1)}
+                    onChange={(e) => setEndTime(Math.min(duration, parseFloat(e.target.value) || duration))}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Selection: {(endTime - startTime).toFixed(1)}s of {duration.toFixed(1)}s
+              </p>
+            </>
+          )}
+
+          {!audioBuffer && !decoding && <AudioPlayer src={file} label="Input" />}
 
           {processing && <ProgressBar value={progress} label="Trimming..." sublabel={`${progress}%`} />}
           {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            {audioBuffer && (
+              <Button variant="secondary" onClick={handlePreview}>
+                {isPlaying ? <Square className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                {isPlaying ? 'Stop' : 'Preview Selection'}
+              </Button>
+            )}
             <Button onClick={handleTrim} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim'}
             </Button>
-            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
+            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); stop(); }}>Choose different file</Button>
           </div>
 
           {outputBlob && (
