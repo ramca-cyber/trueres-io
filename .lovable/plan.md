@@ -1,92 +1,95 @@
 
 
-# Collapsible Categories + Featured Section in Tool Nav
+# Add MKV, AVI, WMA Playback via FFmpeg Transcoding
 
 ## Overview
 
-Redesign the sidebar navigation to have two distinct sections:
+Browsers cannot natively play MKV, AVI, or WMA files. To support them in the Media Player, we will **auto-transcode** these formats to browser-friendly equivalents using the FFmpeg engine already in the project. The user drops a `.mkv` file, sees a brief "Converting for playback..." progress bar, and then the player loads with the transcoded result.
 
-1. **Featured** -- A pinned section at the top highlighting the Media Player and a curated set of the most popular tools, giving them prime visibility.
-2. **All Tools** -- The full category listing, but with each category collapsible (using Radix Collapsible). Categories auto-expand if the active route is inside them, and stay collapsed otherwise to reduce visual clutter.
-
-## Design
+## How It Works
 
 ```text
-+------------------------------+
-|  FEATURED                    |
-|    > Player                  |
-|    > Spectrogram             |
-|    > LUFS Meter              |
-|    > Converter               |
-|    > Video to MP3            |
-+------------------------------+
-|  AUDIO ANALYSIS        [v]  |
-|    > Hi-Res Verifier         |
-|    > Spectrogram             |
-|    > ...                     |
-+------------------------------+
-|  AUDIO PROCESSING      [>]  |  <- collapsed
-+------------------------------+
-|  VIDEO PROCESSING      [>]  |  <- collapsed
-+------------------------------+
-|  GENERATORS            [>]  |  <- collapsed
-+------------------------------+
-|  REFERENCE             [>]  |  <- collapsed
-+------------------------------+
+User drops file
+      |
+      v
+Is it natively playable?
+(mp4, webm, mov, mp3, flac, wav, ogg, aac, m4a, aiff, opus)
+      |              |
+     YES            NO (mkv, avi, wma)
+      |              |
+      v              v
+Play directly    Transcode via FFmpeg
+                  - MKV/AVI -> MP4 (copy codecs when possible)
+                  - WMA -> MP3
+                      |
+                      v
+                 Show progress bar
+                      |
+                      v
+                 Play transcoded blob
 ```
 
-## Details
+## Transcoding Details
 
-### Featured Section
+- **MKV / AVI -> MP4**: Use `-c copy` first (fast remux, no re-encoding). The codecs inside MKV/AVI are often H.264+AAC which MP4 supports natively. If that fails (incompatible codecs), fall back to re-encoding.
+- **WMA -> MP3**: Re-encode to MP3 at 192kbps since the codecs are fundamentally different.
 
-- Defined as a simple array of tool IDs in `ToolNav.tsx` (no registry changes needed):
-  ```
-  const FEATURED_IDS = [
-    'media-player',
-    'spectrogram-viewer',
-    'lufs-meter',
-    'audio-converter',
-    'video-to-mp3',
-    'hi-res-verifier',
-  ];
-  ```
-- Rendered as a separate block at the top with a star icon and "Featured" label
-- Same link styling as the rest of the nav -- just a curated shortcut list
-- Tools appearing in Featured also still appear in their category below (no duplication issues since it's just navigation links)
+## UI Changes
 
-### Collapsible Categories
-
-- Use the existing `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` from `@radix-ui/react-collapsible` (already installed)
-- Each category header becomes a clickable trigger with a chevron indicator that rotates on open
-- **Auto-expand logic**: A category is open by default if the current route matches any tool within it. Otherwise it starts collapsed.
-- Users can manually toggle any category open/closed
-- State is local to the component (no persistence needed -- it resets on navigation which is fine since the active category auto-opens)
-
-### Chevron Animation
-
-- Use the `ChevronRight` icon from lucide-react
-- Rotate 90 degrees when open via a CSS transition: `transition-transform duration-200` + conditional `rotate-90`
+When a non-native file is loaded, instead of immediately showing the player, show:
+1. A status message: "Converting for playback..."
+2. The FFmpeg progress bar (reuse the existing `ProgressBar` component)
+3. On completion, swap to the normal player view with the transcoded blob
+4. On error, show an error message with a retry button
 
 ## Technical Details
 
-### File to modify
+### Files to modify
 
-**`src/components/layout/ToolNav.tsx`** -- the only file that changes.
+| File | Changes |
+|------|---------|
+| `src/pages/tools/MediaPlayer.tsx` | Add transcoding flow for non-native formats; new state for transcoded blob and loading UI |
+| `src/config/constants.ts` | Already has MKV/AVI in `VIDEO_ACCEPT` -- add `.wma` to `AUDIO_ACCEPT` and `ALL_MEDIA_ACCEPT` |
 
-### Implementation
+### Constants update (`constants.ts`)
 
-1. Add imports: `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` from `@/components/ui/collapsible`, plus `Star` and `ChevronRight` from lucide-react
-2. Define `FEATURED_IDS` array at top of file
-3. Render Featured section before the category loop:
-   - Filter `TOOLS` by the featured IDs, preserving the array order
-   - Render with the same link item pattern
-4. Replace each category `<div>` with a `<Collapsible>` wrapper:
-   - `defaultOpen` set to `true` if any tool in that category matches `location.pathname`
-   - Category header becomes `<CollapsibleTrigger>` with chevron
-   - Tool list wrapped in `<CollapsibleContent>`
-5. Add a subtle visual separator between Featured and All Tools sections (a simple `<div className="border-b border-border my-3" />`)
+Add `.wma` to `AUDIO_ACCEPT` so the file input accepts it:
+```
+AUDIO_ACCEPT = '...,.wma'
+```
 
-### No other files need changes
+### MediaPlayer.tsx changes
 
-The collapsible UI components already exist. The tool registry stays the same. No new dependencies.
+1. Define which extensions need transcoding:
+   ```
+   const NEEDS_TRANSCODE = ['mkv', 'avi', 'wma'];
+   ```
 
+2. Define a helper to check if a file is natively playable:
+   ```
+   const NATIVE_VIDEO = ['mp4', 'webm', 'mov'];
+   const NATIVE_AUDIO = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a', 'aiff', 'opus'];
+   ```
+
+3. Add state for the transcoded blob and transcoding status:
+   ```
+   const [playbackSrc, setPlaybackSrc] = useState<File | Blob | null>(null);
+   const [transcoding, setTranscoding] = useState(false);
+   const [transError, setTransError] = useState<string | null>(null);
+   ```
+
+4. On file select: check extension. If native, set `playbackSrc = file` immediately. If needs transcode, run FFmpeg:
+   - MKV/AVI: `ffmpeg -i input.mkv -c copy output.mp4` (fast remux attempt)
+   - WMA: `ffmpeg -i input.wma -ab 192k output.mp3`
+
+5. Show a transcoding state in the UI:
+   - Progress bar from `ProgressBar` component
+   - "Converting for playback..." label
+   - Error state with retry button
+
+6. Pass `playbackSrc` (which is either the original File or the transcoded Blob) to `AudioPlayer` / `VideoPlayer`
+
+### Implementation order
+
+1. Update `AUDIO_ACCEPT` in `constants.ts` to include `.wma`
+2. Update `MediaPlayer.tsx` with transcoding logic and UI states
