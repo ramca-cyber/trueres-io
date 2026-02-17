@@ -1,58 +1,101 @@
 
-# FFT Performance Optimization
 
-## The Problem
+# Comprehensive Tool Expansion for Audiophiles & Home Theater
 
-The current `fft()` function in `src/engines/analysis/modules/fft.ts` recomputes `Math.cos()` and `Math.sin()` inside the **innermost loop** (lines 31-33). For a single FFT of size N, the trig calls scale as O(N log N). This impacts four analysis modules that call `fft()`:
+Merging the 3 previously approved tools with new additions. Total: **12 new tools** (36 existing -> 48).
 
-- **spectrogram.ts** -- hundreds of FFT calls per file (worst case)
-- **spectrum.ts** -- up to 200 FFT calls
-- **bandwidth.ts** -- multiple FFT calls
-- **lossy-detect.ts** -- multiple FFT calls
+---
 
-## The Fix
+## Previously Approved (3 tools)
 
-Pre-compute a **twiddle factor table** for each butterfly stage. The trig values for a given FFT size depend only on `len` and `k`, so they can be computed once per stage (outer loop) instead of once per butterfly (inner loop).
+### 1. Speaker Channel Test (`/speaker-test`)
+Category: generators | Engine: oscillator
+Multichannel speaker identification with stereo and surround (5.1/7.1) modes using ChannelMergerNode. Visual speaker layout, polarity check.
 
-```text
-Before (current):
-  for each stage (len):
-    for each group (i):
-      for each butterfly (k):
-        cos = Math.cos(angle * k)   // HOT PATH
-        sin = Math.sin(angle * k)   // HOT PATH
+### 2. Subwoofer & Bass Test (`/subwoofer-test`)
+Category: generators | Engine: oscillator
+Low-frequency steps (10-120Hz), continuous sweep, crossover finder, room mode detection hints.
 
-After (optimized):
-  for each stage (len):
-    cosTable[k] = Math.cos(angle * k)  // once per stage
-    sinTable[k] = Math.sin(angle * k)
-    for each group (i):
-      for each butterfly (k):
-        cos = cosTable[k]  // table lookup
-        sin = sinTable[k]
-```
+### 3. Surround Sound Reference (`/surround-reference`)
+Category: reference | Engine: none
+Channel layouts (2.0 to 7.1.4), speaker placement angles, crossover recommendations, format comparison (Dolby/DTS/Atmos).
 
-This eliminates redundant trig from the inner two loops, yielding the 3-5x speedup noted in the feedback.
+---
 
-## Spectrogram Rendering Verification
+## New Additions (9 tools)
 
-Confirmed: `SpectrogramCanvas.tsx` is **fully functional**, not placeholder. It:
-- Renders pixel-level spectrogram images using `ImageData` with colormap functions (magma, inferno, viridis, plasma, grayscale)
-- Draws frequency and time axis labels
-- `SpectrogramViewer.tsx` wires it to the analysis pipeline via `useAnalysis` -> `computeSpectrogram`
+### 4. ABX Blind Test (`/abx-test`)
+Category: analysis | Engine: analysis
+**The** audiophile tool. Load two audio files (A and B), the tool randomly assigns one as X, user guesses. Tracks trials and computes statistical significance (p-value). Uses existing AudioPlayer and file decoding pipeline. Huge engagement potential.
 
-No changes needed for the rendering side.
+### 5. Clipping & True Peak Detector (`/clipping-detector`)
+Category: analysis | Engine: analysis
+Dedicated tool to scan for inter-sample peaks (ISP), hard clipping, and consecutive clipped samples. Visual timeline showing where clips occur on the waveform. Uses existing PCM decoding + a new lightweight scan module.
 
-## Scope
+### 6. Room / Mic Analyzer (`/room-analyzer`)
+Category: generators | Engine: oscillator
+Uses `getUserMedia()` to capture microphone input and pipes it through existing `spectrum.ts` and `spectrogram.ts` analysis in real-time. Shows live frequency response, noise floor measurement, and RT60 estimation. Useful for room acoustics and mic testing.
 
-Only one file changes: `src/engines/analysis/modules/fft.ts`. All four consumers benefit automatically.
+### 7. Headphone Burn-in Generator (`/burn-in-generator`)
+Category: generators | Engine: oscillator
+Controversial but massive traffic driver. Plays a curated sequence: pink noise, frequency sweeps, and dynamic content on a timer (1-24 hours). Uses existing noise and sweep generators. Simple loop scheduler. Includes a disclaimer about burn-in science.
 
-## Technical Detail
+### 8. Impulse Response Viewer (`/ir-viewer`)
+Category: analysis | Engine: analysis
+Load WAV impulse response files and visualize: time-domain waveform, frequency response (existing spectrum module), RT60 decay estimation, and waterfall spectrogram. Popular among home theater and headphone DSP users.
 
-The `fft()` function will be updated to:
+### 9. Turntable / Vinyl Test (`/turntable-test`)
+Category: generators | Engine: oscillator
+Generate test tones for turntable calibration: 3150Hz wow & flutter test tone, anti-skating bias tone (315Hz one-channel), speed accuracy tone (3150Hz for 33/45 RPM verification). Uses existing oscillator pattern.
 
-1. In the butterfly outer loop (`for len = 2..N`), allocate two `Float64Array(halfLen)` arrays
-2. Fill them with `cos(angle * k)` and `sin(angle * k)` for `k = 0..halfLen-1`
-3. In the inner loop, index into the arrays instead of calling `Math.cos/Math.sin`
+### 10. dB Unit Converter (`/db-converter`)
+Category: reference | Engine: none
+Convert between dBFS, dBu, dBV, dBSPL, watts, and volts. Reference calculator for gain staging. Includes common reference levels (consumer -10dBV, pro +4dBu). Pure static computation, no audio engine.
 
-The `magnitudeSpectrum`, `powerSpectrum`, and `nextPow2` functions are unchanged.
+### 11. Listening Fatigue Monitor (`/listening-monitor`)
+Category: reference | Engine: none
+A timer-based tool that estimates SPL exposure over time based on user-set listening level. Shows safe listening duration per WHO/NIOSH guidelines. Break reminders. Simple but sticky for daily use and health-conscious audiophiles.
+
+### 12. Bit-Perfect Test (`/bit-perfect-test`)
+Category: generators | Engine: oscillator
+Generates a known 16-bit PCM test signal, user plays it through their chain and records back (or compares output). Verifies that no sample-rate conversion, volume adjustment, or DSP is applied by the OS/DAC. Uses existing WAV encoder for the reference file.
+
+---
+
+## Implementation Approach
+
+### Files to Create (12 new pages)
+- `src/pages/tools/SpeakerTest.tsx`
+- `src/pages/tools/SubwooferTest.tsx`
+- `src/pages/tools/SurroundReference.tsx`
+- `src/pages/tools/ABXTest.tsx`
+- `src/pages/tools/ClippingDetector.tsx`
+- `src/pages/tools/RoomAnalyzer.tsx`
+- `src/pages/tools/BurnInGenerator.tsx`
+- `src/pages/tools/IRViewer.tsx`
+- `src/pages/tools/TurntableTest.tsx`
+- `src/pages/tools/DbConverter.tsx`
+- `src/pages/tools/ListeningMonitor.tsx`
+- `src/pages/tools/BitPerfectTest.tsx`
+
+### New Engine Module
+- `src/engines/analysis/modules/clipping.ts` -- inter-sample peak and clip detection scanner
+
+### Files to Modify
+- `src/config/tool-registry.ts` -- 12 new tool definitions
+- `src/App.tsx` -- 12 lazy imports + routes
+- `public/sitemap.xml` -- 12 new URLs
+- `src/config/tool-faqs.ts` -- FAQ entries for new tools
+
+### No New Dependencies
+All tools use existing infrastructure:
+- Web Audio API (`OscillatorNode`, `ChannelMergerNode`, `getUserMedia`)
+- Existing analysis modules (`spectrum.ts`, `spectrogram.ts`, `waveform.ts`)
+- Existing generators (`tone.ts`, `sweep.ts`, `noise.ts`, `wav-encoder.ts`)
+- Existing UI components (`ToolPage`, `FileDropZone`, `MetricCard`, `Slider`, etc.)
+
+### Build Order
+Phase 1 (oscillator-based, simplest): Speaker Test, Subwoofer Test, Burn-in Generator, Turntable Test
+Phase 2 (static/reference): Surround Reference, dB Converter, Listening Monitor
+Phase 3 (analysis-based): ABX Test, Clipping Detector, IR Viewer, Room Analyzer, Bit-Perfect Test
+
