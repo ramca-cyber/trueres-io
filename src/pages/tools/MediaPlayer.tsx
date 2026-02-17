@@ -1,21 +1,26 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getToolById } from '@/config/tool-registry';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { VideoPlayer } from '@/components/shared/VideoPlayer';
+import { PlaylistPanel, QueueItem } from '@/components/shared/PlaylistPanel';
 import { ToolActionGrid } from '@/components/shared/ToolActionGrid';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Button } from '@/components/ui/button';
 import { ALL_MEDIA_ACCEPT, formatFileSize } from '@/config/constants';
-import { RotateCcw, Play, AlertTriangle, RefreshCw } from 'lucide-react';
+import { RotateCcw, Play, AlertTriangle, RefreshCw, SkipBack, SkipForward, Shuffle, Repeat, Repeat1 } from 'lucide-react';
 import { processFile, getFFmpeg } from '@/engines/processing/ffmpeg-manager';
+import { cn } from '@/lib/utils';
 
 const tool = getToolById('media-player')!;
 
 const NATIVE_VIDEO = ['mp4', 'webm', 'mov'];
 const NATIVE_AUDIO = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a', 'aiff', 'aif', 'opus', 'weba'];
 const NEEDS_TRANSCODE = ['mkv', 'avi', 'wma'];
+
+let nextId = 0;
+function makeId() { return `track-${++nextId}`; }
 
 function getExt(file: File): string {
   return file.name.split('.').pop()?.toLowerCase() || '';
@@ -46,15 +51,12 @@ async function transcodeFile(
     return { blob, isVideo: false };
   }
 
-  // MKV / AVI → MP4: try fast remux first
   try {
     const blob = await processFile(file, inputName, 'output.mp4', [
       '-i', inputName, '-c', 'copy', '-movflags', '+faststart', 'output.mp4',
     ], onProgress);
     return { blob, isVideo: true };
   } catch {
-    // Remux failed — re-encode
-    // Need to re-load engine since processFile cleaned up
     await getFFmpeg();
     const blob = await processFile(file, inputName, 'output.mp4', [
       '-i', inputName, '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
@@ -64,67 +66,262 @@ async function transcodeFile(
   }
 }
 
-export default function MediaPlayer() {
-  const [file, setFile] = useState<File | null>(null);
-  const [playbackSrc, setPlaybackSrc] = useState<File | Blob | null>(null);
-  const [playbackIsVideo, setPlaybackIsVideo] = useState(false);
-  const [transcoding, setTranscoding] = useState(false);
-  const [progress, setProgress] = useState(-1);
-  const [transError, setTransError] = useState<string | null>(null);
+type LoopMode = 'off' | 'one' | 'all';
 
-  const startTranscode = useCallback(async (f: File) => {
-    setTranscoding(true);
-    setProgress(-1);
-    setTransError(null);
-    setPlaybackSrc(null);
-    try {
-      const result = await transcodeFile(f, setProgress);
-      setPlaybackSrc(result.blob);
-      setPlaybackIsVideo(result.isVideo);
-    } catch (e) {
-      setTransError(e instanceof Error ? e.message : 'Transcoding failed');
-    } finally {
-      setTranscoding(false);
+function fisherYatesShuffle(length: number): number[] {
+  const arr = Array.from({ length }, (_, i) => i);
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function buildQueueItem(file: File): QueueItem {
+  const transcode = needsTranscode(file);
+  return {
+    id: makeId(),
+    file,
+    isVideo: isVideoFile(file),
+    status: transcode ? 'pending' : 'ready',
+    playbackSrc: transcode ? undefined : file,
+  };
+}
+
+export default function MediaPlayer() {
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [shuffleOn, setShuffleOn] = useState(false);
+  const [shuffleOrder, setShuffleOrder] = useState<number[]>([]);
+  const [loopMode, setLoopMode] = useState<LoopMode>('off');
+  const [autoPlay, setAutoPlay] = useState(false);
+
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const current = queue[currentIndex] as QueueItem | undefined;
+
+  // Transcode current track if needed
+  useEffect(() => {
+    if (!current || current.status !== 'pending') return;
+    let cancelled = false;
+
+    setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'transcoding' as const, progress: -1 } : item));
+
+    transcodeFile(current.file, (p) => {
+      if (cancelled) return;
+      setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, progress: p } : item));
+    }).then(result => {
+      if (cancelled) return;
+      setQueue(q => q.map((item, i) => i === currentIndex ? {
+        ...item,
+        status: 'ready' as const,
+        playbackSrc: result.blob,
+        isVideo: result.isVideo,
+        progress: 100,
+      } : item));
+    }).catch(err => {
+      if (cancelled) return;
+      setQueue(q => q.map((item, i) => i === currentIndex ? {
+        ...item,
+        status: 'error' as const,
+      } : item));
+    });
+
+    return () => { cancelled = true; };
+  }, [currentIndex, current?.id, current?.status]);
+
+  // Regenerate shuffle order when queue changes or shuffle toggled
+  useEffect(() => {
+    if (shuffleOn && queue.length > 0) {
+      setShuffleOrder(fisherYatesShuffle(queue.length));
     }
+  }, [shuffleOn, queue.length]);
+
+  const getNextIndex = useCallback((fromIndex: number): number | null => {
+    if (queue.length <= 1 && loopMode !== 'one') return loopMode === 'all' ? 0 : null;
+
+    if (shuffleOn && shuffleOrder.length === queue.length) {
+      const posInShuffle = shuffleOrder.indexOf(fromIndex);
+      const nextPos = posInShuffle + 1;
+      if (nextPos >= shuffleOrder.length) {
+        return loopMode === 'all' ? shuffleOrder[0] : null;
+      }
+      return shuffleOrder[nextPos];
+    }
+
+    const next = fromIndex + 1;
+    if (next >= queue.length) {
+      return loopMode === 'all' ? 0 : null;
+    }
+    return next;
+  }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
+
+  const getPrevIndex = useCallback((fromIndex: number): number | null => {
+    if (shuffleOn && shuffleOrder.length === queue.length) {
+      const posInShuffle = shuffleOrder.indexOf(fromIndex);
+      const prevPos = posInShuffle - 1;
+      if (prevPos < 0) {
+        return loopMode === 'all' ? shuffleOrder[shuffleOrder.length - 1] : null;
+      }
+      return shuffleOrder[prevPos];
+    }
+
+    const prev = fromIndex - 1;
+    if (prev < 0) {
+      return loopMode === 'all' ? queue.length - 1 : null;
+    }
+    return prev;
+  }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
+
+  const handleEnded = useCallback(() => {
+    if (loopMode === 'one') {
+      const el = audioRef.current || videoRef.current;
+      if (el) {
+        el.currentTime = 0;
+        el.play();
+      }
+      return;
+    }
+    const next = getNextIndex(currentIndex);
+    if (next !== null) {
+      setCurrentIndex(next);
+      setAutoPlay(true);
+    }
+  }, [loopMode, currentIndex, getNextIndex]);
+
+  const handleNext = useCallback(() => {
+    const next = getNextIndex(currentIndex);
+    if (next !== null) {
+      setCurrentIndex(next);
+      setAutoPlay(true);
+    }
+  }, [currentIndex, getNextIndex]);
+
+  const handlePrev = useCallback(() => {
+    const prev = getPrevIndex(currentIndex);
+    if (prev !== null) {
+      setCurrentIndex(prev);
+      setAutoPlay(true);
+    }
+  }, [currentIndex, getPrevIndex]);
+
+  const handleFilesSelect = useCallback((files: File[]) => {
+    const items = files.map(buildQueueItem);
+    if (queue.length === 0) {
+      setQueue(items);
+      setCurrentIndex(0);
+      setAutoPlay(false);
+    } else {
+      setQueue(q => [...q, ...items]);
+    }
+  }, [queue.length]);
+
+  const handleSingleFile = useCallback((file: File) => {
+    handleFilesSelect([file]);
+  }, [handleFilesSelect]);
+
+  const handleSelect = useCallback((index: number) => {
+    setCurrentIndex(index);
+    setAutoPlay(true);
   }, []);
 
-  const handleFileSelect = useCallback((f: File) => {
-    setFile(f);
-    setTransError(null);
-    if (needsTranscode(f)) {
-      startTranscode(f);
-    } else {
-      setPlaybackSrc(f);
-      setPlaybackIsVideo(isVideoFile(f));
+  const handleRemove = useCallback((index: number) => {
+    setQueue(q => {
+      const next = [...q];
+      next.splice(index, 1);
+      return next;
+    });
+    if (index < currentIndex) {
+      setCurrentIndex(i => i - 1);
+    } else if (index === currentIndex) {
+      // stay at same index (next track slides in), or clamp
+      setCurrentIndex(i => Math.min(i, queue.length - 2));
+      setAutoPlay(true);
     }
-  }, [startTranscode]);
+  }, [currentIndex, queue.length]);
 
-  const handleReset = () => {
-    setFile(null);
-    setPlaybackSrc(null);
-    setTranscoding(false);
-    setProgress(-1);
-    setTransError(null);
-  };
+  const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
+    setQueue(q => {
+      const next = [...q];
+      const [moved] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, moved);
+      return next;
+    });
+    // Adjust currentIndex to follow the currently playing track
+    if (fromIndex === currentIndex) {
+      setCurrentIndex(toIndex);
+    } else if (fromIndex < currentIndex && toIndex >= currentIndex) {
+      setCurrentIndex(i => i - 1);
+    } else if (fromIndex > currentIndex && toIndex <= currentIndex) {
+      setCurrentIndex(i => i + 1);
+    }
+  }, [currentIndex]);
 
-  // Clean up blob URLs
+  const handleClear = useCallback(() => {
+    setQueue([]);
+    setCurrentIndex(0);
+    setAutoPlay(false);
+    setShuffleOn(false);
+  }, []);
+
+  const handleAddFiles = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const cycleLoop = useCallback(() => {
+    setLoopMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off');
+  }, []);
+
+  // Keyboard shortcuts
   useEffect(() => {
-    return () => {
-      if (playbackSrc && playbackSrc !== file && playbackSrc instanceof Blob) {
-        // Blob will be GC'd
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        const el = audioRef.current || videoRef.current;
+        if (el) el.paused ? el.play() : el.pause();
+      } else if (e.key === 'n' || e.key === 'N') {
+        handleNext();
+      } else if (e.key === 'p' || e.key === 'P') {
+        handlePrev();
       }
     };
-  }, [playbackSrc, file]);
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [handleNext, handlePrev]);
+
+  const hasQueue = queue.length > 0;
 
   return (
     <ToolPage tool={tool}>
-      {!file ? (
+      {/* Hidden file input for "Add files" button */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={ALL_MEDIA_ACCEPT}
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            handleFilesSelect(Array.from(e.target.files));
+            e.target.value = '';
+          }
+        }}
+      />
+
+      {!hasQueue ? (
         <div className="space-y-3">
           <FileDropZone
             accept={ALL_MEDIA_ACCEPT}
-            onFileSelect={handleFileSelect}
-            label="Drop any audio or video file"
-            sublabel="Supports MKV, AVI & WMA via automatic conversion"
+            onFileSelect={handleSingleFile}
+            multiple
+            onMultipleFiles={handleFilesSelect}
+            label="Drop any audio or video files"
+            sublabel="Multiple files supported · MKV, AVI & WMA auto-converted"
           />
           <div className="flex flex-wrap items-center justify-center gap-2">
             {['WAV', 'FLAC', 'MP3', 'OGG', 'AAC', 'M4A', 'MP4', 'WebM', 'MKV', 'AVI', 'WMA', 'MOV'].map((fmt) => (
@@ -134,66 +331,126 @@ export default function MediaPlayer() {
             ))}
           </div>
         </div>
-      ) : transcoding ? (
-        <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <RefreshCw className="h-5 w-5 text-primary animate-spin" />
-            <div>
-              <p className="font-medium text-sm">Converting for playback…</p>
-              <p className="text-xs text-muted-foreground">{file.name} · {formatFileSize(file.size)}</p>
-            </div>
-          </div>
-          <ProgressBar
-            value={progress}
-            label={progress >= 0 ? `${progress}%` : undefined}
-            sublabel="This may take a moment for large files"
-          />
-        </div>
-      ) : transError ? (
-        <div className="rounded-xl border border-destructive/50 bg-card p-6 space-y-4">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-            <div>
-              <p className="font-medium text-sm">Conversion failed</p>
-              <p className="text-xs text-muted-foreground">{transError}</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => startTranscode(file)}>
-              <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-              Retry
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleReset}>
-              <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-              Choose different file
-            </Button>
-          </div>
-        </div>
-      ) : playbackSrc ? (
-        <div className="space-y-6">
-          <div className="rounded-xl border border-border bg-card overflow-hidden">
-            <div className="flex items-center gap-3 border-b border-border px-4 py-2.5 bg-secondary/30">
-              <Play className="h-4 w-4 text-primary shrink-0" />
-              <span className="font-medium text-sm truncate">{file.name}</span>
-              <span className="text-xs text-muted-foreground ml-auto shrink-0">{formatFileSize(file.size)}</span>
-            </div>
-            <div className="p-4">
-              {playbackIsVideo ? (
-                <VideoPlayer src={playbackSrc} />
-              ) : (
-                <div className="py-4">
-                  <AudioPlayer src={playbackSrc} />
+      ) : (
+        <div className="space-y-4">
+          {/* Player area */}
+          {current && current.status === 'transcoding' ? (
+            <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <RefreshCw className="h-5 w-5 text-primary animate-spin" />
+                <div>
+                  <p className="font-medium text-sm">Converting for playback…</p>
+                  <p className="text-xs text-muted-foreground">{current.file.name} · {formatFileSize(current.file.size)}</p>
                 </div>
-              )}
+              </div>
+              <ProgressBar
+                value={current.progress ?? -1}
+                label={current.progress != null && current.progress >= 0 ? `${current.progress}%` : undefined}
+                sublabel="This may take a moment for large files"
+              />
             </div>
-          </div>
-          <ToolActionGrid file={file} currentToolId="media-player" />
-          <Button variant="outline" size="sm" onClick={handleReset}>
+          ) : current && current.status === 'error' ? (
+            <div className="rounded-xl border border-destructive/50 bg-card p-6 space-y-4">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                <div>
+                  <p className="font-medium text-sm">Conversion failed</p>
+                  <p className="text-xs text-muted-foreground">{current.file.name}</p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => {
+                  setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'pending' as const } : item));
+                }}>
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Retry
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleNext}>
+                  <SkipForward className="h-3.5 w-3.5 mr-1.5" />
+                  Skip
+                </Button>
+              </div>
+            </div>
+          ) : current && current.status === 'ready' && current.playbackSrc ? (
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <div className="flex items-center gap-3 border-b border-border px-4 py-2.5 bg-secondary/30">
+                <Play className="h-4 w-4 text-primary shrink-0" />
+                <span className="font-medium text-sm truncate">{current.file.name}</span>
+                <span className="text-xs text-muted-foreground ml-auto shrink-0">{formatFileSize(current.file.size)}</span>
+              </div>
+              <div className="p-4">
+                {current.isVideo ? (
+                  <VideoPlayer
+                    ref={videoRef}
+                    src={current.playbackSrc}
+                    onEnded={handleEnded}
+                    autoPlay={autoPlay}
+                  />
+                ) : (
+                  <div className="py-4">
+                    <AudioPlayer
+                      ref={audioRef}
+                      src={current.playbackSrc}
+                      onEnded={handleEnded}
+                      autoPlay={autoPlay}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Playback controls */}
+          {queue.length > 1 && (
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShuffleOn(s => !s)}
+                className={cn('h-8 w-8 p-0', shuffleOn && 'text-primary bg-primary/10')}
+                title="Shuffle"
+              >
+                <Shuffle className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handlePrev} className="h-8 w-8 p-0" title="Previous (P)">
+                <SkipBack className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" onClick={handleNext} className="h-8 w-8 p-0" title="Next (N)">
+                <SkipForward className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={cycleLoop}
+                className={cn('h-8 w-8 p-0', loopMode !== 'off' && 'text-primary bg-primary/10')}
+                title={`Loop: ${loopMode}`}
+              >
+                {loopMode === 'one' ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
+              </Button>
+            </div>
+          )}
+
+          {/* Playlist panel */}
+          <PlaylistPanel
+            queue={queue}
+            currentIndex={currentIndex}
+            onSelect={handleSelect}
+            onRemove={handleRemove}
+            onReorder={handleReorder}
+            onAddFiles={handleAddFiles}
+            onClear={handleClear}
+          />
+
+          {current && current.status === 'ready' && (
+            <ToolActionGrid file={current.file} currentToolId="media-player" />
+          )}
+
+          <Button variant="outline" size="sm" onClick={handleClear}>
             <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-            Choose different file
+            Reset
           </Button>
         </div>
-      ) : null}
+      )}
     </ToolPage>
   );
 }
