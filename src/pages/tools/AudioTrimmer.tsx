@@ -10,7 +10,8 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useAudioPreview } from '@/hooks/use-audio-preview';
-import { trimArgs } from '@/engines/processing/presets';
+import { trimArgs, injectGainFilter } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Play, Square } from 'lucide-react';
@@ -27,6 +28,7 @@ const AudioTrimmer = () => {
   }, []);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(30);
+  const [gainDb, setGainDb] = useState(0);
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, duration, isPlaying, currentTime, decoding, playRegion, stop, seekTo } = useAudioPreview(file);
 
@@ -44,7 +46,7 @@ const AudioTrimmer = () => {
     const ext = file.name.split('.').pop() || 'mp3';
     const outName = `trimmed.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = trimArgs(inputName, outName, startTime, endTime);
+    const args = injectGainFilter(trimArgs(inputName, outName, startTime, endTime), gainDb);
     await process(file, inputName, outName, args);
   };
 
@@ -105,6 +107,8 @@ const AudioTrimmer = () => {
               <p className="text-xs text-muted-foreground">
                 Selection: {(endTime - startTime).toFixed(1)}s of {duration.toFixed(1)}s
               </p>
+
+              <GainControl file={file} gainDb={gainDb} onGainChange={setGainDb} />
             </>
           )}
 
