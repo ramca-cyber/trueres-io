@@ -51,6 +51,7 @@ const DacTest = lazy(() => import("./pages/tools/DacTest"));
 const BitrateCalculator = lazy(() => import("./pages/tools/BitrateCalculator"));
 const FormatReference = lazy(() => import("./pages/tools/FormatReference"));
 const BluetoothCodecs = lazy(() => import("./pages/tools/BluetoothCodecs"));
+const MediaPlayer = lazy(() => import("./pages/tools/MediaPlayer"));
 
 const queryClient = new QueryClient();
 
@@ -124,6 +125,7 @@ const App = () => (
                 <Route path="/bitrate-calculator" element={<BitrateCalculator />} />
                 <Route path="/format-reference" element={<FormatReference />} />
                 <Route path="/bluetooth-codecs" element={<BluetoothCodecs />} />
+                <Route path="/media-player" element={<MediaPlayer />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

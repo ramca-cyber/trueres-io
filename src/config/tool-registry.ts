@@ -478,6 +478,19 @@ export const TOOLS: ToolDefinition[] = [
     icon: 'Bluetooth',
     keywords: ['Bluetooth', 'LDAC', 'aptX', 'AAC', 'SBC', 'codec', 'wireless', 'latency'],
   },
+  {
+    id: 'media-player',
+    name: 'Media Player',
+    shortName: 'Player',
+    route: '/media-player',
+    category: 'reference',
+    engine: 'none',
+    description: 'Play any audio or video file instantly in your browser. Drag, drop, and listen or watch — no processing needed.',
+    metaDescription: 'Free online media player. Play WAV, FLAC, MP3, MP4, WebM, and more directly in your browser. No upload, no install.',
+    icon: 'Play',
+    acceptsFormats: ['wav', 'flac', 'aiff', 'mp3', 'ogg', 'aac', 'm4a', 'mp4', 'webm', 'avi', 'mkv', 'mov'],
+    keywords: ['play', 'media player', 'audio player', 'video player', 'preview', 'listen', 'watch'],
+  },
 ];
 
 export function getToolsByCategory(category: string): ToolDefinition[] {
