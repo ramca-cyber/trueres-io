@@ -19,17 +19,17 @@ const AllTools = () => {
   return (
     <>
       <Helmet>
-        <title>All 35 Free Audio & Video Tools — TrueRes.io</title>
-        <meta name="description" content="Browse all 35 free browser-based audio and video tools. Audio analysis, format conversion, video processing, signal generators, and reference guides." />
+        <title>All {TOOLS.length} Free Audio & Video Tools — TrueRes.io</title>
+        <meta name="description" content={`Browse all ${TOOLS.length} free browser-based audio and video tools. Audio analysis, format conversion, video processing, signal generators, and reference guides.`} />
         <meta property="og:title" content="All Tools — TrueRes.io" />
-        <meta property="og:description" content="35 free professional audio & video tools running in your browser." />
+        <meta property="og:description" content={`${TOOLS.length} free professional audio & video tools running in your browser.`} />
         <link rel="canonical" href="https://trueres.io/tools" />
       </Helmet>
 
       <div className="container max-w-4xl py-6 space-y-6">
         <header>
           <h1 className="text-2xl md:text-3xl font-heading font-bold">All Tools</h1>
-          <p className="text-muted-foreground mt-1">Browse all 35 free browser-based audio & video tools.</p>
+          <p className="text-muted-foreground mt-1">Browse all {TOOLS.length} free browser-based audio & video tools.</p>
         </header>
 
         {/* Search & Filter */}

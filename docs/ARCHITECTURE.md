@@ -12,7 +12,7 @@ TrueRes.io is a **free, privacy-first, browser-based** audio and video tools pla
 
 1. **Privacy First** — Zero server uploads. All decoding, analysis, and processing in-browser.
 2. **Browser-Native** — Web Audio API, Canvas/WebGL, ffmpeg.wasm, Web Workers.
-3. **SEO-Driven Growth** — 35 dedicated tool pages, each an SEO landing page.
+3. **SEO-Driven Growth** — 36 dedicated tool pages, each an SEO landing page.
 4. **Monetization** — Ad-supported (banner/sidebar/interstitial slots) + affiliate links.
 5. **Progressive Enhancement** — Graceful degradation with browser capability detection.
 
@@ -24,13 +24,13 @@ TrueRes.io is a **free, privacy-first, browser-based** audio and video tools pla
 |---|---|
 | Framework | React 18 + TypeScript + Vite |
 | Styling | Tailwind CSS + shadcn/ui components |
-| State | Zustand (AudioStore, FFmpegStore) |
+| State | Zustand (AudioStore, FFmpegStore, AppStore, MiniPlayerStore, FileTransferStore) |
 | Analysis Engine | Web Audio API + custom JS analyzers |
 | Processing Engine | ffmpeg.wasm (@ffmpeg/ffmpeg + @ffmpeg/core) |
-| Visualization | WebGL (spectrogram) + Canvas 2D (waveform, meters) |
-| Threading | Web Workers + worker pool |
+| Visualization | Canvas 2D (spectrogram, waveform, spectrum, meters) |
 | Routing | React Router v6, lazy-loaded per tool |
-| SEO | react-helmet-async, JSON-LD, sitemap |
+| SEO | react-helmet-async, JSON-LD (WebApplication + FAQPage schemas), dynamic sitemap |
+| Animations | Framer Motion |
 
 ---
 
@@ -96,11 +96,11 @@ TrueRes.io is a **free, privacy-first, browser-based** audio and video tools pla
 │  │  Header  │  │ Tool Nav │  │   Footer   │            │
 │  └─────────┘  └──────────┘  └────────────┘            │
 ├─────────────────────────────────────────────────────────┤
-│                   Tool Pages (35)                       │
+│                   Tool Pages (36)                       │
 │  ┌───────────────────────────────────────────────────┐ │
 │  │  FileDropZone → Decode → Analyze → Visualize     │ │
 │  │       ↓            ↓         ↓          ↓         │ │
-│  │  FileInfoBar   AudioStore  Cache    Canvas/WebGL  │ │
+│  │  FileInfoBar   AudioStore  Cache    Canvas 2D     │ │
 │  └───────────────────────────────────────────────────┘ │
 ├─────────────────────────────────────────────────────────┤
 │                    Engine Layer                         │
@@ -113,32 +113,30 @@ TrueRes.io is a **free, privacy-first, browser-based** audio and video tools pla
 │  │ • LUFS/DR        │    │ • Video→Audio     │          │
 │  │ • Bit Depth      │    │ • Video Compress  │          │
 │  │ • Lossy Detect   │    │ • GIF/WebM        │          │
-│  └────────┬─────────┘    └────────┬──────────┘          │
-│           │                       │                     │
-│  ┌────────▼───────────────────────▼──────────┐         │
-│  │           Web Worker Pool                  │         │
-│  │  (navigator.hardwareConcurrency threads)   │         │
-│  └────────────────────────────────────────────┘         │
+│  └─────────────────┘    └──────────────────┘          │
 ├─────────────────────────────────────────────────────────┤
 │                   Storage Layer                         │
 │  ┌──────────────┐  ┌──────────────┐                    │
 │  │   Zustand     │  │  IndexedDB   │                    │
 │  │  AudioStore   │  │  WASM Cache  │                    │
 │  │  FFmpegStore  │  │              │                    │
+│  │  AppStore     │  │              │                    │
+│  │  MiniPlayer   │  │              │                    │
+│  │  FileTransfer │  │              │                    │
 │  └──────────────┘  └──────────────┘                    │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Tool Registry (35 Tools)
+## Tool Registry (36 Tools)
 
 ### Category 1: Audio Analysis & Forensics (12 tools)
 
 | # | Tool | Route | Engine | Key Analyses |
 |---|---|---|---|---|
 | 1 | Hi-Res Verifier | `/hires-verifier` | Analysis | bitDepth, bandwidth, lossy, DR, verdict |
-| 2 | Spectrogram Viewer | `/spectrogram` | Analysis | spectrogram (WebGL) |
+| 2 | Spectrogram Viewer | `/spectrogram` | Analysis | spectrogram (Canvas 2D) |
 | 3 | LUFS Meter | `/lufs-meter` | Analysis | LUFS (integrated/short/momentary), true peak, LRA |
 | 4 | Dynamic Range Meter | `/dynamic-range` | Analysis | DR score, crest factor, peak/RMS, clipping |
 | 5 | Waveform Viewer | `/waveform-viewer` | Analysis | waveform envelope (multi-resolution) |
@@ -185,13 +183,36 @@ TrueRes.io is a **free, privacy-first, browser-based** audio and video tools pla
 | 31 | Hearing Test | `/hearing-test` | Analysis (oscillator) | Audiometric hearing test |
 | 32 | DAC & Headphone Test Suite | `/dac-test` | Analysis (oscillator) | Channel/frequency/DR tests |
 
-### Category 5: Reference & Education (3 tools)
+### Category 5: Reference & Education (4 tools)
 
 | # | Tool | Route | Engine | Description |
 |---|---|---|---|---|
 | 33 | Audio Bitrate Calculator | `/bitrate-calculator` | None (pure math) | Calculate file sizes |
 | 34 | Audio Format Reference | `/format-reference` | None (static) | Format comparison guide |
 | 35 | Bluetooth Codec Comparison | `/bluetooth-codecs` | None (static) | Codec comparison guide |
+| 36 | Media Player | `/media-player` | ffmpeg (transcode) + Web Audio | Universal audio/video player with EQ, crossfade, gapless, A-B loop |
+
+---
+
+## Media Player Features
+
+The Universal Media Player (tool #36) is a full-featured playback tool with:
+
+- **Multi-file queue** with drag-to-reorder, shuffle, and loop modes (off/one/all)
+- **Auto-transcode** for unsupported formats (MKV, AVI, WMA → browser-playable)
+- **3-band parametric EQ** (Bass/Mid/Treble ±12dB) via Web Audio API
+- **Playback speed** control (0.5x–2x)
+- **Crossfade** between tracks (0–5s configurable)
+- **Gapless playback** via pre-buffering next track
+- **A-B loop** region with precise time markers
+- **Interactive waveform seekbar** with decoded peak visualization
+- **Live spectrum** (frequency bars) and **scrolling spectrogram** visualizations
+- **Metadata display** with cover art extraction (ID3, Vorbis Comments)
+- **Sleep timer** (15m/30m/60m/end-of-track)
+- **Audio-only mode** for video files (strips video track via ffmpeg)
+- **Mini-player** with persistent playback across navigation
+- **Keyboard shortcuts**: Space (play/pause), N (next), P (previous)
+- **.m3u playlist export**
 
 ---
 
@@ -206,47 +227,38 @@ src/
 │   │   ├── AppShell.tsx
 │   │   ├── Header.tsx
 │   │   ├── Footer.tsx
-│   │   ├── ToolNav.tsx
-│   │   └── MobileDrawer.tsx
+│   │   └── ToolNav.tsx
 │   ├── shared/                 # Shared tool components
 │   │   ├── FileDropZone.tsx
 │   │   ├── FileInfoBar.tsx
 │   │   ├── ProgressBar.tsx
-│   │   ├── ErrorBanner.tsx
 │   │   ├── DownloadButton.tsx
-│   │   ├── ToolPage.tsx
-│   │   ├── ToolHeader.tsx
+│   │   ├── ToolPage.tsx        # Standard tool page wrapper (SEO, FAQ, cross-links)
+│   │   ├── ToolActionGrid.tsx  # Cross-tool quick actions
 │   │   ├── BrowserCompatBanner.tsx
-│   │   ├── AdSlot.tsx
-│   │   └── CrossToolLinks.tsx
-│   ├── visualizations/         # Canvas/WebGL components
-│   │   ├── SpectrogramGL.tsx
+│   │   ├── CrossToolLinks.tsx
+│   │   ├── ErrorBoundary.tsx
+│   │   ├── AudioPlayer.tsx     # Web Audio player with EQ + speed + volume
+│   │   ├── VideoPlayer.tsx
+│   │   ├── MiniPlayer.tsx      # Persistent mini-player bar
+│   │   ├── PlaylistPanel.tsx   # Drag-reorder queue
+│   │   ├── MetadataDisplay.tsx # ID3/Vorbis tag + cover art display
+│   │   ├── WaveformSeekbar.tsx # Decoded waveform with click-to-seek
+│   │   ├── LiveSpectrum.tsx    # Real-time frequency bars
+│   │   ├── LiveSpectrogram.tsx # Scrolling frequency heatmap
+│   │   ├── ABLoopControls.tsx  # A-B loop region controls
+│   │   └── InteractiveWaveform.tsx
+│   ├── visualizations/         # Canvas components
 │   │   ├── SpectrogramCanvas.tsx
 │   │   ├── WaveformCanvas.tsx
 │   │   ├── SpectrumCanvas.tsx
-│   │   ├── MeterBar.tsx
-│   │   ├── GoniometerCanvas.tsx
-│   │   ├── Gauge.tsx
-│   │   ├── TimeGraph.tsx
-│   │   └── Audiogram.tsx
-│   ├── controls/               # Tool control components
-│   │   ├── ColorMapSelector.tsx
-│   │   ├── FFTSizeSelector.tsx
-│   │   ├── WindowSelector.tsx
-│   │   ├── ChannelSelector.tsx
-│   │   ├── ZoomControls.tsx
-│   │   ├── PlaybackControls.tsx
-│   │   ├── FormatSelector.tsx
-│   │   ├── QualitySlider.tsx
-│   │   └── TrimHandles.tsx
+│   │   ├── LoudnessHistoryCanvas.tsx
+│   │   ├── CorrelationMeter.tsx
+│   │   └── DRGauge.tsx
 │   └── display/                # Data display components
 │       ├── MetricCard.tsx
 │       ├── VerdictBanner.tsx
-│       ├── ComplianceBadge.tsx
-│       ├── FormatBadge.tsx
-│       ├── TagTable.tsx
-│       ├── CoverArt.tsx
-│       └── ReportCard.tsx
+│       └── ComplianceBadge.tsx
 ├── engines/
 │   ├── analysis/               # Analysis engine
 │   │   ├── decoders/
@@ -275,32 +287,31 @@ src/
 │   │   │   ├── spectrum.ts
 │   │   │   ├── silence.ts
 │   │   │   └── verdict.ts
-│   │   ├── generators/
-│   │   │   ├── tone.ts
-│   │   │   ├── sweep.ts
-│   │   │   ├── noise.ts
-│   │   │   └── wav-encoder.ts
-│   │   └── workers/
-│   │       ├── analysis.worker.ts
-│   │       └── worker-pool.ts
+│   │   └── generators/
+│   │       ├── tone.ts
+│   │       ├── sweep.ts
+│   │       ├── noise.ts
+│   │       └── wav-encoder.ts
 │   └── processing/             # Processing engine (ffmpeg.wasm)
 │       ├── ffmpeg-manager.ts
-│       ├── presets.ts
-│       └── ffmpeg.worker.ts
+│       └── presets.ts
 ├── stores/
-│   ├── audio-store.ts          # Zustand audio state
-│   ├── ffmpeg-store.ts         # Zustand ffmpeg state
-│   └── app-store.ts            # Zustand app/UI state
+│   ├── audio-store.ts
+│   ├── ffmpeg-store.ts
+│   ├── app-store.ts
+│   ├── mini-player-store.ts
+│   └── file-transfer-store.ts
 ├── config/
-│   ├── tool-registry.ts        # All 35 tool definitions
+│   ├── tool-registry.ts        # All 36 tool definitions
+│   ├── tool-faqs.ts            # Per-tool FAQ content for SEO
 │   ├── browser-compat.ts       # Browser capability detection
 │   └── constants.ts            # Shared constants
 ├── pages/
-│   ├── Index.tsx               # Home page
-│   ├── AllTools.tsx            # Tool directory
+│   ├── Index.tsx               # Home page (dynamic tool count)
+│   ├── AllTools.tsx            # Tool directory with search & filter
 │   ├── About.tsx               # About page
 │   ├── NotFound.tsx            # 404
-│   └── tools/                  # 35 tool pages
+│   └── tools/                  # 36 tool pages
 │       ├── HiResVerifier.tsx
 │       ├── SpectrogramViewer.tsx
 │       ├── LufsMeter.tsx
@@ -335,19 +346,21 @@ src/
 │       ├── DacTest.tsx
 │       ├── BitrateCalculator.tsx
 │       ├── FormatReference.tsx
-│       └── BluetoothCodecs.tsx
+│       ├── BluetoothCodecs.tsx
+│       └── MediaPlayer.tsx
 ├── hooks/
-│   ├── use-audio-file.ts       # File load + decode hook
-│   ├── use-analysis.ts         # Run analysis module hook
-│   ├── use-ffmpeg.ts           # ffmpeg processing hook
-│   ├── use-browser-compat.ts   # Browser capability hook
-│   └── use-mobile.tsx          # Mobile detection (existing)
+│   ├── use-audio-file.ts
+│   ├── use-analysis.ts
+│   ├── use-audio-preview.ts
+│   ├── use-ffmpeg.ts
+│   ├── use-mobile.tsx
+│   └── use-toast.ts
 ├── lib/
-│   └── utils.ts                # Existing utilities
+│   └── utils.ts                # cn(), formatTime(), formatTimePrecise()
 ├── types/
-│   ├── audio.ts                # Audio-related types
-│   ├── tools.ts                # Tool registry types
-│   └── analysis.ts             # Analysis result types
+│   ├── audio.ts
+│   ├── tools.ts
+│   └── analysis.ts
 ├── App.tsx
 ├── App.css
 ├── index.css
@@ -357,51 +370,73 @@ src/
 
 ---
 
+## SEO Strategy
+
+### Per-Tool SEO
+- **Helmet** meta tags: `<title>`, `<meta name="description">`, OG tags, canonical URL
+- **JSON-LD schemas**: `WebApplication` (per tool) + `FAQPage` (for tools with FAQ content)
+- **FAQ sections**: Rendered in DOM for crawlers, also structured as JSON-LD
+- **Dynamic tool count**: Homepage and AllTools page use `TOOLS.length` (currently 36)
+
+### Site-Level SEO
+- `sitemap.xml` — all 36 tool routes + homepage + tools directory + about page
+- `robots.txt` — allows all crawlers, references sitemap
+- `index.html` — base OG/Twitter Card meta tags, canonical URL
+- Organization + WebSite JSON-LD schemas on homepage
+
+### Keyword Targeting
+Each tool has a unique set of `keywords` in the tool registry, plus a dedicated `metaDescription` optimized for search. FAQ content targets long-tail conversational queries.
+
+---
+
 ## Implementation Phases
 
-### Phase 1: Foundation (Design System + Shell + Registry)
-- Design tokens in index.css + tailwind.config.ts
-- Google Fonts setup
-- AppShell, Header, Footer, ToolNav
-- Tool registry + dynamic lazy routing
+All phases are complete:
+
+### Phase 1: Foundation ✅
+- Design tokens, fonts, AppShell, Header, Footer, ToolNav
+- Tool registry with 36 tool definitions + dynamic lazy routing
 - FileDropZone, ToolPage wrapper, BrowserCompatBanner
 - Home page, All Tools page, About page
 
-### Phase 2: Analysis Engine
+### Phase 2: Analysis Engine ✅
 - Header parsers (WAV, FLAC, MP3, AIFF, OGG, MP4)
-- Decoder manager (Web Audio API → wasm-audio-decoders → ffmpeg fallback)
+- Decoder manager (Web Audio API fallback chain)
 - Zustand AudioStore
 - Core analysis modules (FFT, LUFS, DR, bit-depth, bandwidth, lossy-detect, stereo, waveform, spectrum)
-- Web Worker pool
 - Signal generators (tone, sweep, noise)
 
-### Phase 3: Processing Engine
+### Phase 3: Processing Engine ✅
 - ffmpeg.wasm integration with IndexedDB caching
 - Zustand FFmpegStore
 - Processing presets (convert, trim, normalize, extract)
 - Progress reporting
 
-### Phase 4: Visualizations
-- WebGL spectrogram with Canvas 2D fallback
+### Phase 4: Visualizations ✅
+- Canvas 2D spectrogram
 - Waveform renderer (multi-resolution)
 - Spectrum display (bar/line)
-- LUFS/peak meters
-- Goniometer (stereo X-Y)
-- Gauges, charts, audiogram
+- LUFS/peak meters, DR gauge
+- Correlation meter (stereo)
 
-### Phase 5: Tool Pages (35 tools)
-- Build each tool page using shared components + engine hooks
-- Per-tool SEO metadata
-- Per-tool FAQ sections
+### Phase 5: Tool Pages (36 tools) ✅
+- All tool pages built with shared components + engine hooks
+- Per-tool SEO metadata + JSON-LD
+- Per-tool FAQ sections (13 tools)
 - Cross-tool link suggestions
 
-### Phase 6: Polish & SEO
-- react-helmet-async integration
-- JSON-LD structured data
-- OG images
-- Ad slot integration
-- Performance optimization (code splitting, memory management)
-- Final responsive pass
+### Phase 6: Media Player ✅
+- Universal audio/video player with queue management
+- Web Audio EQ, crossfade, gapless playback
+- A-B loop, live visualizations, waveform seekbar
+- Mini-player, sleep timer, audio-only mode
+- Keyboard shortcuts, .m3u export
+
+### Phase 7: Audit & Polish ✅
+- Memory leak fixes (MetadataDisplay, AudioContext cleanup)
+- Performance optimizations (ResizeObserver, event-driven rAF)
+- Accessibility (aria-labels, Radix Popover, canvas roles)
+- Shared utilities (formatTime extracted to lib/utils)
 
 ---
 
