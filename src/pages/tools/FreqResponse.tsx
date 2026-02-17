@@ -9,6 +9,7 @@ import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 import { type SpectrumData } from '@/types/analysis';
 import { Button } from '@/components/ui/button';
 
@@ -16,6 +17,11 @@ const tool = getToolById('freq-response')!;
 
 const FreqResponse = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
   const { runAnalysis, getResult } = useAnalysis();
 
   const spectrumData = getResult<SpectrumData & { type: string; timestamp: number; duration: number }>('spectrum');

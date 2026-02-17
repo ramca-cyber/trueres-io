@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -12,11 +12,17 @@ import { trimArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Clock } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('video-trimmer')!;
 
 const VideoTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) setFile(pending);
+  }, []);
   const [startTime, setStartTime] = useState('0');
   const [endTime, setEndTime] = useState('30');
   const videoRef = useRef<HTMLVideoElement>(null);

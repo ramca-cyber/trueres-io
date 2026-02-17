@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -13,6 +13,7 @@ import { channelArgs, type ChannelOp } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Play, Square } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('channel-ops')!;
 
@@ -25,6 +26,11 @@ const OPS: { value: ChannelOp; label: string; desc: string; previewMode: Channel
 
 const ChannelOps = () => {
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) setFile(pending);
+  }, []);
   const [op, setOp] = useState<ChannelOp>('mono');
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playChannel, stop } = useAudioPreview(file);

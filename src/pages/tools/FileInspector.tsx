@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { Button } from '@/components/ui/button';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
@@ -7,11 +8,17 @@ import { getToolById } from '@/config/tool-registry';
 import { ALL_MEDIA_ACCEPT, FORMAT_NAMES, formatFileSize, formatDuration } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAudioStore } from '@/stores/audio-store';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('file-inspector')!;
 
 const FileInspector = () => {
   const { loadFile, fileName, fileSize, headerInfo, metadata, file } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
 
   return (
     <ToolPage tool={tool}>

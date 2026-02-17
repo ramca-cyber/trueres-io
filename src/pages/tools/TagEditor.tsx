@@ -5,12 +5,18 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { useAudioFile } from '@/hooks/use-audio-file';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 
 const tool = getToolById('tag-editor')!;
 
 const TagEditor = () => {
   const { loadFile, fileName, fileSize, headerInfo, metadata, file } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
 
   // Fix memory leak: manage cover art object URL lifecycle
   const coverArtUrl = useMemo(() => {

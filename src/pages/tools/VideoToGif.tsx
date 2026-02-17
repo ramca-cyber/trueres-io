@@ -13,11 +13,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { Loader2 } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('video-to-gif')!;
 
 const VideoToGif = () => {
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) setFile(pending);
+  }, []);
   const [fps, setFps] = useState(10);
   const [width, setWidth] = useState('480');
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();

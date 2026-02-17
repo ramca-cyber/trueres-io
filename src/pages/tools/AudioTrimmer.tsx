@@ -14,11 +14,17 @@ import { trimArgs } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Play, Square } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('audio-trimmer')!;
 
 const AudioTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) setFile(pending);
+  }, []);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(30);
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
