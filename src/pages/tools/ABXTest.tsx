@@ -4,6 +4,7 @@ import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { Play, Square, Shuffle } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('abx-test')!;
 
@@ -31,9 +32,11 @@ const ABXTest = () => {
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
   useEffect(() => {
+    registerCallback('abx-test', stopPlayback);
     return () => {
       try { sourceRef.current?.stop(); } catch {}
       audioCtxRef.current?.close();
+      unregisterCallback('abx-test');
     };
   }, []);
 
@@ -64,6 +67,7 @@ const ABXTest = () => {
   }, []);
 
   const playBuffer = useCallback((buffer: AudioBuffer, label: string) => {
+    notifyPlayStart('abx-test');
     stopPlayback();
     if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
       audioCtxRef.current = new AudioContext();

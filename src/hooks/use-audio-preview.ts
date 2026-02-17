@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 export type ChannelMode = 'stereo' | 'left' | 'right' | 'mono' | 'swap';
 
@@ -69,7 +70,9 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
     return () => { cancelled = true; };
   }, [file, getCtx]);
 
-  // Cleanup on unmount
+  // Register with playback manager & cleanup on unmount
+  const instanceId = useRef(`audio-preview-${Math.random().toString(36).slice(2, 8)}`).current;
+
   useEffect(() => {
     return () => {
       cancelAnimationFrame(rafRef.current);
@@ -78,8 +81,9 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
       if (ctxRef.current && ctxRef.current.state !== 'closed') {
         ctxRef.current.close();
       }
+      unregisterCallback(instanceId);
     };
-  }, []);
+  }, [instanceId]);
 
   // Animation frame loop for currentTime
   const startTimeTracking = useCallback((ctx: AudioContext, offset: number, endSec: number) => {
@@ -110,9 +114,16 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
     setIsPlaying(false);
   }, []);
 
+  // Keep callback registration in sync with stop function
+  useEffect(() => {
+    registerCallback(instanceId, stop);
+    return () => unregisterCallback(instanceId);
+  }, [instanceId, stop]);
+
   const playRegion = useCallback((startSec: number, endSec: number) => {
     if (!audioBuffer) return;
     stop();
+    notifyPlayStart(instanceId);
 
     const ctx = getCtx();
     const source = ctx.createBufferSource();
@@ -133,6 +144,7 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
   const playWithGain = useCallback((gainDb: number, startSec?: number, endSec?: number) => {
     if (!audioBuffer) return;
     stop();
+    notifyPlayStart(instanceId);
 
     const ctx = getCtx();
     const source = ctx.createBufferSource();
@@ -160,6 +172,7 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
   const playChannel = useCallback((mode: ChannelMode, startSec?: number, endSec?: number) => {
     if (!audioBuffer) return;
     stop();
+    notifyPlayStart(instanceId);
 
     const ctx = getCtx();
     const source = ctx.createBufferSource();

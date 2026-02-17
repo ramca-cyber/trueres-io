@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Play, Square, RotateCcw } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('channel-balance')!;
 
@@ -44,6 +45,7 @@ export default function ChannelBalance() {
   }, []);
 
   const start = useCallback(() => {
+    notifyPlayStart('channel-balance');
     const ctx = new AudioContext();
     ctxRef.current = ctx;
 
@@ -90,7 +92,10 @@ export default function ChannelBalance() {
     }
   }, [currentFreq]);
 
-  useEffect(() => () => { stop(); }, [stop]);
+  useEffect(() => {
+    registerCallback('channel-balance', stop);
+    return () => { stop(); unregisterCallback('channel-balance'); };
+  }, [stop]);
 
   const saveResult = () => {
     setResults(prev => ({ ...prev, [currentFreq]: balance }));

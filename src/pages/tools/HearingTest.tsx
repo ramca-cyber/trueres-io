@@ -4,6 +4,7 @@ import { getToolById } from '@/config/tool-registry';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Play, Square, Volume2 } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('hearing-test')!;
 
@@ -20,15 +21,17 @@ const HearingTest = () => {
   const oscRef = useRef<OscillatorNode | null>(null);
   const gainRef = useRef<GainNode | null>(null);
 
-  // Cleanup AudioContext on unmount
   useEffect(() => {
+    registerCallback('hearing-test', stopTone);
     return () => {
       try { oscRef.current?.stop(); } catch {}
       audioCtxRef.current?.close();
+      unregisterCallback('hearing-test');
     };
   }, []);
 
   const playTone = useCallback((freq: number, vol: number) => {
+    notifyPlayStart('hearing-test');
     const ctx = audioCtxRef.current || new AudioContext();
     audioCtxRef.current = ctx;
 

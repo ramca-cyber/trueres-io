@@ -9,6 +9,7 @@ import { DownloadButton } from '@/components/shared/DownloadButton';
 import { generateNoise } from '@/engines/analysis/generators/noise';
 import { encodeWav } from '@/engines/analysis/generators/wav-encoder';
 import { Play, Square } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('noise-generator')!;
 
@@ -23,15 +24,17 @@ const NoiseGenerator = () => {
 
   const amplitude = Math.pow(10, level[0] / 20);
 
-  // Cleanup AudioContext on unmount
   useEffect(() => {
+    registerCallback('noise-generator', stopPlayback);
     return () => {
       try { sourceRef.current?.stop(); } catch {}
       audioCtxRef.current?.close();
+      unregisterCallback('noise-generator');
     };
   }, []);
 
   const startPlayback = useCallback(() => {
+    notifyPlayStart('noise-generator');
     const ctx = new AudioContext();
     const sr = ctx.sampleRate;
     const duration = 30;

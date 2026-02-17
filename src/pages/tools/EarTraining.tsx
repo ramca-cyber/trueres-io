@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Play, Square, RotateCcw } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('ear-training')!;
 
@@ -86,6 +87,7 @@ export default function EarTraining() {
     const randomIdx = Math.floor(Math.random() * bands.length);
     setTargetBand(randomIdx);
 
+    notifyPlayStart('ear-training');
     const ctx = new AudioContext();
     ctxRef.current = ctx;
 
@@ -136,7 +138,10 @@ export default function EarTraining() {
     setShowAnswer(false);
   };
 
-  useEffect(() => () => { stop(); }, [stop]);
+  useEffect(() => {
+    registerCallback('ear-training', stop);
+    return () => { stop(); unregisterCallback('ear-training'); };
+  }, [stop]);
 
   const gameOver = round + 1 >= totalRounds && showAnswer;
 
