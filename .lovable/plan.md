@@ -1,95 +1,153 @@
 
 
-# Add MKV, AVI, WMA Playback via FFmpeg Transcoding
+# Playlist, Queue, and Playback Controls for Media Player
 
 ## Overview
 
-Browsers cannot natively play MKV, AVI, or WMA files. To support them in the Media Player, we will **auto-transcode** these formats to browser-friendly equivalents using the FFmpeg engine already in the project. The user drops a `.mkv` file, sees a brief "Converting for playback..." progress bar, and then the player loads with the transcoded result.
+Transform the single-file Media Player into a full playlist-capable player with queue management, shuffle, loop modes, drag-to-reorder, and auto-advance. The player area stays as-is; a **playlist panel** appears below it once multiple files are loaded.
 
-## How It Works
+## Features
+
+### 1. Multi-file Queue
+- Change the drop zone to accept **multiple files** at once (already supported by `FileDropZone` via its `multiple` + `onMultipleFiles` props)
+- Also allow adding more files to an existing queue via an "Add files" button
+- Each file becomes a track in the playlist
+
+### 2. Playlist Panel
 
 ```text
-User drops file
-      |
-      v
-Is it natively playable?
-(mp4, webm, mov, mp3, flac, wav, ogg, aac, m4a, aiff, opus)
-      |              |
-     YES            NO (mkv, avi, wma)
-      |              |
-      v              v
-Play directly    Transcode via FFmpeg
-                  - MKV/AVI -> MP4 (copy codecs when possible)
-                  - WMA -> MP3
-                      |
-                      v
-                 Show progress bar
-                      |
-                      v
-                 Play transcoded blob
++------------------------------------------+
+|  Now Playing: song-02.flac               |
++------------------------------------------+
+|        [ Audio / Video Player ]          |
++------------------------------------------+
+|  Queue (5 tracks)        [+Add] [Clear]  |
+|  ┌──────────────────────────────────┐    |
+|  │ = 01. intro.mp3         0:32  x │    |
+|  │ = 02. song-02.flac  >> 3:45  x │    |  << currently playing
+|  │ = 03. demo.wav          1:12  x │    |
+|  │ = 04. clip.mp4          0:58  x │    |
+|  │ = 05. outro.ogg         2:01  x │    |
+|  └──────────────────────────────────┘    |
+|                                          |
+|  [Shuffle]  [Loop: Off / One / All]      |
+|  [<< Prev]  [>> Next]                   |
++------------------------------------------+
 ```
 
-## Transcoding Details
+### 3. Playback Controls
+- **Previous / Next**: Navigate the queue
+- **Shuffle**: Randomize playback order (Fisher-Yates on a separate index array, preserving the visual list order)
+- **Loop modes** (cycle through on click):
+  - **Off**: Stop after the last track
+  - **One**: Repeat the current track
+  - **All**: Loop back to the first track after the last
 
-- **MKV / AVI -> MP4**: Use `-c copy` first (fast remux, no re-encoding). The codecs inside MKV/AVI are often H.264+AAC which MP4 supports natively. If that fails (incompatible codecs), fall back to re-encoding.
-- **WMA -> MP3**: Re-encode to MP3 at 192kbps since the codecs are fundamentally different.
+### 4. Drag-to-Reorder
+- Each track row has a drag handle (grip icon on the left)
+- Implement with native HTML drag-and-drop (`draggable`, `onDragStart`, `onDragOver`, `onDrop`) -- no library needed for a simple vertical list
+- Reordering updates the queue array; if shuffle is on, the shuffle order recalculates
 
-## UI Changes
+### 5. Auto-Advance
+- Listen for the `ended` event on the `<audio>` / `<video>` element
+- On track end: apply loop logic, then load and play the next track
+- Transcoding-needed files are transcoded on-the-fly when they become the active track (not pre-transcoded)
 
-When a non-native file is loaded, instead of immediately showing the player, show:
-1. A status message: "Converting for playback..."
-2. The FFmpeg progress bar (reuse the existing `ProgressBar` component)
-3. On completion, swap to the normal player view with the transcoded blob
-4. On error, show an error message with a retry button
+### 6. Track Removal
+- Each row has an "x" button to remove it from the queue
+- If the currently playing track is removed, auto-advance to the next one
+
+### 7. Keyboard Shortcuts
+- **Space**: Play/pause (only when not focused on an input)
+- **N**: Next track
+- **P**: Previous track
 
 ## Technical Details
 
-### Files to modify
+### New file
+
+| File | Purpose |
+|------|---------|
+| `src/components/shared/PlaylistPanel.tsx` | Playlist UI: track list with drag reorder, remove, now-playing indicator |
+
+### Modified files
 
 | File | Changes |
 |------|---------|
-| `src/pages/tools/MediaPlayer.tsx` | Add transcoding flow for non-native formats; new state for transcoded blob and loading UI |
-| `src/config/constants.ts` | Already has MKV/AVI in `VIDEO_ACCEPT` -- add `.wma` to `AUDIO_ACCEPT` and `ALL_MEDIA_ACCEPT` |
+| `src/pages/tools/MediaPlayer.tsx` | Major rework: multi-file state, queue management, playback controls, auto-advance via `onEnded`, keyboard shortcuts |
+| `src/components/shared/AudioPlayer.tsx` | Add `onEnded` callback prop; expose ref for programmatic control |
+| `src/components/shared/VideoPlayer.tsx` | Add `onEnded` callback prop (ref already supported) |
 
-### Constants update (`constants.ts`)
+### State model in MediaPlayer.tsx
 
-Add `.wma` to `AUDIO_ACCEPT` so the file input accepts it:
+```text
+queue: QueueItem[]          // { id, file, playbackSrc?, isVideo, status }
+currentIndex: number        // index into queue
+shuffleOn: boolean
+shuffleOrder: number[]      // shuffled indices
+loopMode: 'off' | 'one' | 'all'
 ```
-AUDIO_ACCEPT = '...,.wma'
+
+- `QueueItem.status`: `'pending' | 'transcoding' | 'ready' | 'error'`
+- When a track becomes active, if it needs transcoding, kick off transcoding and show progress inline on that row
+- Once ready, set `playbackSrc` and auto-play
+
+### PlaylistPanel.tsx component
+
+Props:
+```text
+queue: QueueItem[]
+currentIndex: number
+onSelect: (index: number) => void
+onRemove: (index: number) => void
+onReorder: (fromIndex: number, toIndex: number) => void
+onAddFiles: () => void
+onClear: () => void
 ```
 
-### MediaPlayer.tsx changes
+Renders:
+- Header with track count, "Add" button, "Clear" button
+- Scrollable list (using existing `ScrollArea` component)
+- Each row: drag handle (GripVertical icon), track number, filename (truncated), file size, remove button (X icon)
+- Currently playing row gets a highlighted background and a small playing indicator icon
+- Transcoding rows show a small spinner instead of the track number
 
-1. Define which extensions need transcoding:
-   ```
-   const NEEDS_TRANSCODE = ['mkv', 'avi', 'wma'];
-   ```
+### AudioPlayer / VideoPlayer changes
 
-2. Define a helper to check if a file is natively playable:
-   ```
-   const NATIVE_VIDEO = ['mp4', 'webm', 'mov'];
-   const NATIVE_AUDIO = ['mp3', 'wav', 'flac', 'ogg', 'aac', 'm4a', 'aiff', 'opus'];
-   ```
+Both need:
+- `onEnded?: () => void` prop, passed to the underlying `<audio>` / `<video>` element
+- `autoPlay?: boolean` prop for auto-playing when a new track loads
 
-3. Add state for the transcoded blob and transcoding status:
-   ```
-   const [playbackSrc, setPlaybackSrc] = useState<File | Blob | null>(null);
-   const [transcoding, setTranscoding] = useState(false);
-   const [transError, setTransError] = useState<string | null>(null);
-   ```
+AudioPlayer additionally needs a `ref` forwarded to the `<audio>` element (VideoPlayer already supports this).
 
-4. On file select: check extension. If native, set `playbackSrc = file` immediately. If needs transcode, run FFmpeg:
-   - MKV/AVI: `ffmpeg -i input.mkv -c copy output.mp4` (fast remux attempt)
-   - WMA: `ffmpeg -i input.wma -ab 192k output.mp3`
+### Drag-and-drop reorder implementation
 
-5. Show a transcoding state in the UI:
-   - Progress bar from `ProgressBar` component
-   - "Converting for playback..." label
-   - Error state with retry button
+Pure HTML5 drag-and-drop on the playlist rows:
+- `draggable` attribute on each row
+- `onDragStart`: store the dragged index
+- `onDragOver`: `e.preventDefault()` + visual drop indicator
+- `onDrop`: call `onReorder(fromIndex, toIndex)` which splices the queue array
 
-6. Pass `playbackSrc` (which is either the original File or the transcoded Blob) to `AudioPlayer` / `VideoPlayer`
+### Flow when user drops multiple files
+
+1. All files added to queue
+2. First file becomes active immediately
+3. If it needs transcoding, show progress; otherwise play immediately
+4. Remaining files sit in queue as `'pending'`
+
+### Flow on track end (auto-advance)
+
+1. If `loopMode === 'one'`: replay current track (reset `currentTime` to 0)
+2. Get next index (from `shuffleOrder` if shuffle is on, otherwise `currentIndex + 1`)
+3. If next index exceeds queue length:
+   - `loopMode === 'all'`: wrap to 0
+   - `loopMode === 'off'`: stop (do nothing)
+4. Set `currentIndex` to next, trigger transcoding if needed, then play
 
 ### Implementation order
 
-1. Update `AUDIO_ACCEPT` in `constants.ts` to include `.wma`
-2. Update `MediaPlayer.tsx` with transcoding logic and UI states
+1. Update `AudioPlayer.tsx` -- add `onEnded` and `autoPlay` props, forward ref
+2. Update `VideoPlayer.tsx` -- add `onEnded` and `autoPlay` props
+3. Create `PlaylistPanel.tsx` -- track list with drag reorder, remove, indicators
+4. Rewrite `MediaPlayer.tsx` -- multi-file queue, playback controls, shuffle/loop, keyboard shortcuts, auto-advance
+
