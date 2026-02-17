@@ -18,6 +18,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 const FEATURED_IDS = [
+  'media-player',
   'hires-verifier',
   'lufs-meter',
   'spectrogram',
