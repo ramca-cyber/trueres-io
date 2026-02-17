@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { TOOLS } from '@/config/tool-registry';
 import { TOOL_CATEGORIES } from '@/types/tools';
@@ -10,18 +9,23 @@ import {
   Tags, Eraser, ArrowUpDown, Split, Music, Minimize2,
   FileImage, FileVideo, VolumeX, FileAudio, Zap, ArrowRight,
   Ear, Headphones, Calculator, Bluetooth,
+  Brain, Compass, Scale, Flame, Disc, CircleDot, Speaker,
+  LayoutGrid, ArrowLeftRight, Clock, Shuffle, TriangleAlert,
+  Mic, Binary, Play,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 const FEATURED_IDS = [
-  'media-player',
-  'spectrogram-viewer',
+  'hires-verifier',
   'lufs-meter',
+  'spectrogram',
+  'abx-test',
   'audio-converter',
+  'crossfeed',
   'video-to-mp3',
-  'hi-res-verifier',
+  'ear-training',
 ];
 
 const iconMap: Record<string, LucideIcon> = {
@@ -32,12 +36,15 @@ const iconMap: Record<string, LucideIcon> = {
   FileImage, FileVideo, VolumeX, FileAudio, Zap, ArrowRight,
   Ear, Headphones, Calculator, BookOpen, Bluetooth,
   Search, Wand2, Video, Waves,
+  Brain, Compass, Scale, Flame, Disc, CircleDot, Speaker,
+  LayoutGrid, ArrowLeftRight, Clock, Shuffle, TriangleAlert,
+  Mic, Binary, Play,
   ScissorsLineDashed: Scissors,
   Sine: Waves,
 };
 
 const categoryIcons: Record<string, LucideIcon> = {
-  Search, Wand2, Video, Waves, BookOpen,
+  Search, Wand2, Video, Waves, BookOpen, Headphones,
 };
 
 interface ToolNavProps {
@@ -89,7 +96,9 @@ export function ToolNav({ onNavigate }: ToolNavProps) {
         {/* All Tools - Collapsible Categories */}
         {TOOL_CATEGORIES.map((cat) => {
           const CategoryIcon = categoryIcons[cat.icon] || Search;
-          const tools = TOOLS.filter((t) => t.category === cat.id);
+          const tools = TOOLS
+            .filter((t) => t.category === cat.id)
+            .sort((a, b) => a.shortName.localeCompare(b.shortName));
           const isCategoryActive = tools.some((t) => location.pathname === t.route);
 
           return (
@@ -98,6 +107,7 @@ export function ToolNav({ onNavigate }: ToolNavProps) {
                 <div className="flex items-center gap-2">
                   <CategoryIcon className={`h-3.5 w-3.5 ${cat.color}`} />
                   <span>{cat.label}</span>
+                  <span className="text-[10px] font-normal opacity-60">({tools.length})</span>
                 </div>
                 <ChevronRight className="h-3.5 w-3.5 shrink-0 transition-transform duration-200 group-data-[state=open]:rotate-90" />
               </CollapsibleTrigger>

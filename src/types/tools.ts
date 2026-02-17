@@ -5,6 +5,7 @@ export type ToolCategory =
   | 'processing'
   | 'video'
   | 'generators'
+  | 'headphone'
   | 'reference';
 
 export type EngineType = 'analysis' | 'ffmpeg' | 'oscillator' | 'none';
@@ -60,6 +61,13 @@ export const TOOL_CATEGORIES: ToolCategoryInfo[] = [
     description: 'Generate tones, sweeps, noise, and run tests',
     icon: 'Waves',
     color: 'text-status-warn',
+  },
+  {
+    id: 'headphone',
+    label: 'Headphone Tools',
+    description: 'Crossfeed, binaural beats, spatial tests, and guides',
+    icon: 'Headphones',
+    color: 'text-purple-400',
   },
   {
     id: 'reference',
