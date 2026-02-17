@@ -36,6 +36,7 @@ const TagEditor = lazy(() => import("./pages/tools/TagEditor"));
 const MetadataStripper = lazy(() => import("./pages/tools/MetadataStripper"));
 const SampleRateConverter = lazy(() => import("./pages/tools/SampleRateConverter"));
 const ChannelOps = lazy(() => import("./pages/tools/ChannelOps"));
+const AudioToVideo = lazy(() => import("./pages/tools/AudioToVideo"));
 const VideoToMp3 = lazy(() => import("./pages/tools/VideoToMp3"));
 const VideoTrimmer = lazy(() => import("./pages/tools/VideoTrimmer"));
 const VideoCompressor = lazy(() => import("./pages/tools/VideoCompressor"));
@@ -122,6 +123,7 @@ const App = () => (
                 <Route path="/metadata-stripper" element={<MetadataStripper />} />
                 <Route path="/sample-rate-converter" element={<SampleRateConverter />} />
                 <Route path="/channel-ops" element={<ChannelOps />} />
+                <Route path="/audio-to-video" element={<AudioToVideo />} />
 
                 {/* Video Processing */}
                 <Route path="/video-to-mp3" element={<VideoToMp3 />} />

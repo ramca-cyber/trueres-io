@@ -374,6 +374,19 @@ export const TOOLS: ToolDefinition[] = [
     acceptsFormats: ['mp4', 'webm', 'avi', 'mkv', 'mov'],
     keywords: ['extract audio', 'video to audio', 'lossless', 'original codec', 'demux'],
   },
+  {
+    id: 'audio-to-video',
+    name: 'Audio to Video Converter',
+    shortName: 'Audio → Video',
+    route: '/audio-to-video',
+    category: 'processing',
+    engine: 'ffmpeg',
+    description: 'Convert an audio file into a YouTube-ready MP4 video with an optional background image. Choose resolution and aspect ratio.',
+    metaDescription: 'Free audio to video converter. Create MP4 from audio with optional background image. Perfect for YouTube podcasts. Browser-based.',
+    icon: 'Film',
+    acceptsFormats: ['wav', 'flac', 'aiff', 'mp3', 'ogg', 'aac', 'm4a'],
+    keywords: ['audio to video', 'podcast video', 'YouTube', 'MP4', 'static image', 'background'],
+  },
 
   // ═══════════════════════════════════════════
   // Category 4: Signal Generators & Testing

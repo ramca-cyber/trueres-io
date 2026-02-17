@@ -1,6 +1,7 @@
 // Supported audio formats for file input accept attributes
 export const AUDIO_ACCEPT = '.wav,.flac,.aiff,.aif,.mp3,.ogg,.opus,.aac,.m4a,.wma,.ape,.wv,.weba';
 export const VIDEO_ACCEPT = '.mp4,.webm,.avi,.mkv,.mov';
+export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 export const ALL_MEDIA_ACCEPT = `${AUDIO_ACCEPT},${VIDEO_ACCEPT}`;
 
 // File size limits
