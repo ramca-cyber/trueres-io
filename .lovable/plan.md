@@ -1,101 +1,118 @@
 
+# Headphone-Focused Tool Expansion
 
-# Comprehensive Tool Expansion for Audiophiles & Home Theater
-
-Merging the 3 previously approved tools with new additions. Total: **12 new tools** (36 existing -> 48).
-
----
-
-## Previously Approved (3 tools)
-
-### 1. Speaker Channel Test (`/speaker-test`)
-Category: generators | Engine: oscillator
-Multichannel speaker identification with stereo and surround (5.1/7.1) modes using ChannelMergerNode. Visual speaker layout, polarity check.
-
-### 2. Subwoofer & Bass Test (`/subwoofer-test`)
-Category: generators | Engine: oscillator
-Low-frequency steps (10-120Hz), continuous sweep, crossover finder, room mode detection hints.
-
-### 3. Surround Sound Reference (`/surround-reference`)
-Category: reference | Engine: none
-Channel layouts (2.0 to 7.1.4), speaker placement angles, crossover recommendations, format comparison (Dolby/DTS/Atmos).
+Add **6 new tools** specifically for headphone users and enthusiasts (48 existing -> 54 total).
 
 ---
 
-## New Additions (9 tools)
+## New Tools
 
-### 4. ABX Blind Test (`/abx-test`)
-Category: analysis | Engine: analysis
-**The** audiophile tool. Load two audio files (A and B), the tool randomly assigns one as X, user guesses. Tracks trials and computes statistical significance (p-value). Uses existing AudioPlayer and file decoding pipeline. Huge engagement potential.
+### 1. Crossfeed Simulator (`/crossfeed`)
+**Category:** processing | **Engine:** oscillator
 
-### 5. Clipping & True Peak Detector (`/clipping-detector`)
-Category: analysis | Engine: analysis
-Dedicated tool to scan for inter-sample peaks (ISP), hard clipping, and consecutive clipped samples. Visual timeline showing where clips occur on the waveform. Uses existing PCM decoding + a new lightweight scan module.
+The most requested headphone feature. Simulates speaker-like listening by blending a delayed, filtered portion of L into R and vice versa. Reduces the "inside your head" effect.
 
-### 6. Room / Mic Analyzer (`/room-analyzer`)
-Category: generators | Engine: oscillator
-Uses `getUserMedia()` to capture microphone input and pipes it through existing `spectrum.ts` and `spectrogram.ts` analysis in real-time. Shows live frequency response, noise floor measurement, and RT60 estimation. Useful for room acoustics and mic testing.
+- Load any audio file via existing `FileDropZone`
+- Adjustable crossfeed level (0-100%) and delay (0-600 microseconds)
+- Three presets: Subtle, Natural, Wide (modeled on Meier/Jan Meier crossfeed)
+- Uses `DelayNode` + `BiquadFilterNode` (lowpass) + `GainNode` per channel, routed through a `ChannelSplitterNode` / `ChannelMergerNode`
+- Real-time toggle on/off for instant A/B comparison
+- Playback via `AudioPlayer` component with the crossfeed chain inserted
 
-### 7. Headphone Burn-in Generator (`/burn-in-generator`)
-Category: generators | Engine: oscillator
-Controversial but massive traffic driver. Plays a curated sequence: pink noise, frequency sweeps, and dynamic content on a timer (1-24 hours). Uses existing noise and sweep generators. Simple loop scheduler. Includes a disclaimer about burn-in science.
+### 2. Binaural Beat Generator (`/binaural-beats`)
+**Category:** generators | **Engine:** oscillator
 
-### 8. Impulse Response Viewer (`/ir-viewer`)
-Category: analysis | Engine: analysis
-Load WAV impulse response files and visualize: time-domain waveform, frequency response (existing spectrum module), RT60 decay estimation, and waterfall spectrogram. Popular among home theater and headphone DSP users.
+Extremely popular and simple to implement. Two `OscillatorNode`s at slightly different frequencies routed to L and R ears.
 
-### 9. Turntable / Vinyl Test (`/turntable-test`)
-Category: generators | Engine: oscillator
-Generate test tones for turntable calibration: 3150Hz wow & flutter test tone, anti-skating bias tone (315Hz one-channel), speed accuracy tone (3150Hz for 33/45 RPM verification). Uses existing oscillator pattern.
+- Base frequency slider (100-500 Hz)
+- Beat frequency selector (1-40 Hz) with labeled bands: Delta (1-4), Theta (4-8), Alpha (8-14), Beta (14-30), Gamma (30-40)
+- Optional background noise layer (pink/brown noise from existing generator)
+- Session timer (5-60 min)
+- Volume control with safety limiter
 
-### 10. dB Unit Converter (`/db-converter`)
-Category: reference | Engine: none
-Convert between dBFS, dBu, dBV, dBSPL, watts, and volts. Reference calculator for gain staging. Includes common reference levels (consumer -10dBV, pro +4dBu). Pure static computation, no audio engine.
+### 3. Soundstage & Imaging Test (`/soundstage-test`)
+**Category:** generators | **Engine:** oscillator
 
-### 11. Listening Fatigue Monitor (`/listening-monitor`)
-Category: reference | Engine: none
-A timer-based tool that estimates SPL exposure over time based on user-set listening level. Shows safe listening duration per WHO/NIOSH guidelines. Break reminders. Simple but sticky for daily use and health-conscious audiophiles.
+Test how well your headphones render spatial positioning.
 
-### 12. Bit-Perfect Test (`/bit-perfect-test`)
-Category: generators | Engine: oscillator
-Generates a known 16-bit PCM test signal, user plays it through their chain and records back (or compares output). Verifies that no sample-rate conversion, volume adjustment, or DSP is applied by the OS/DAC. Uses existing WAV encoder for the reference file.
+- **Panning test:** Tone sweeps smoothly from hard-left to hard-right using `StereoPannerNode`
+- **Center image test:** Mono tone to evaluate phantom center accuracy
+- **Width test:** Correlated vs decorrelated noise to test perceived width
+- **HRTF 3D test:** Uses Web Audio `PannerNode` with `panningModel: 'HRTF'` to position a tone at virtual positions around the listener (front, rear, above)
+- Visual circle diagram showing current source position
+
+### 4. Channel Balance / Driver Match Test (`/channel-balance`)
+**Category:** generators | **Engine:** oscillator
+
+Check if your headphone drivers are matched in volume and frequency response.
+
+- Plays pink noise or tone alternating L/R rapidly (200ms intervals) to detect imbalance
+- User adjustable balance slider to compensate and find the center
+- Multi-frequency check: tests at 100Hz, 1kHz, 4kHz, 10kHz to catch frequency-dependent imbalance
+- Reports perceived offset in dB
+- Simple pass/fail per frequency band
+
+### 5. EQ Ear Training (`/ear-training`)
+**Category:** generators | **Engine:** oscillator
+
+Learn to identify frequency bands by ear -- essential for mixing and critical listening.
+
+- Plays pink noise or music (loaded via `FileDropZone`)
+- Randomly boosts one frequency band by +6/+12 dB using `BiquadFilterNode` (peaking)
+- User guesses which band was boosted from options (Sub, Bass, Low-Mid, Mid, Upper-Mid, Presence, Air)
+- Tracks score across rounds
+- Difficulty levels: Easy (3 bands), Medium (5 bands), Hard (8 bands, narrower Q)
+
+### 6. Headphone Comparison Guide (`/headphone-guide`)
+**Category:** reference | **Engine:** none
+
+Static reference page for headphone enthusiasts.
+
+- Headphone types explained: open-back, closed-back, planar magnetic, electrostatic, IEM
+- Impedance and sensitivity guide (what needs an amp)
+- DAC/amp pairing recommendations by impedance ranges
+- Common target curves explained (Harman, Diffuse Field, Free Field)
+- EQ tips for popular headphones
 
 ---
 
-## Implementation Approach
+## Technical Details
 
-### Files to Create (12 new pages)
-- `src/pages/tools/SpeakerTest.tsx`
-- `src/pages/tools/SubwooferTest.tsx`
-- `src/pages/tools/SurroundReference.tsx`
-- `src/pages/tools/ABXTest.tsx`
-- `src/pages/tools/ClippingDetector.tsx`
-- `src/pages/tools/RoomAnalyzer.tsx`
-- `src/pages/tools/BurnInGenerator.tsx`
-- `src/pages/tools/IRViewer.tsx`
-- `src/pages/tools/TurntableTest.tsx`
-- `src/pages/tools/DbConverter.tsx`
-- `src/pages/tools/ListeningMonitor.tsx`
-- `src/pages/tools/BitPerfectTest.tsx`
-
-### New Engine Module
-- `src/engines/analysis/modules/clipping.ts` -- inter-sample peak and clip detection scanner
+### Files to Create (6)
+- `src/pages/tools/CrossfeedSimulator.tsx`
+- `src/pages/tools/BinauralBeats.tsx`
+- `src/pages/tools/SoundstageTest.tsx`
+- `src/pages/tools/ChannelBalance.tsx`
+- `src/pages/tools/EarTraining.tsx`
+- `src/pages/tools/HeadphoneGuide.tsx`
 
 ### Files to Modify
-- `src/config/tool-registry.ts` -- 12 new tool definitions
-- `src/App.tsx` -- 12 lazy imports + routes
-- `public/sitemap.xml` -- 12 new URLs
+- `src/config/tool-registry.ts` -- 6 new tool definitions
+- `src/App.tsx` -- 6 lazy imports + routes
+- `public/sitemap.xml` -- 6 new URLs
 - `src/config/tool-faqs.ts` -- FAQ entries for new tools
 
 ### No New Dependencies
-All tools use existing infrastructure:
-- Web Audio API (`OscillatorNode`, `ChannelMergerNode`, `getUserMedia`)
-- Existing analysis modules (`spectrum.ts`, `spectrogram.ts`, `waveform.ts`)
-- Existing generators (`tone.ts`, `sweep.ts`, `noise.ts`, `wav-encoder.ts`)
-- Existing UI components (`ToolPage`, `FileDropZone`, `MetricCard`, `Slider`, etc.)
+All tools use existing Web Audio API nodes:
+- `ChannelSplitterNode` / `ChannelMergerNode` (crossfeed)
+- `StereoPannerNode` / `PannerNode` with HRTF (soundstage)
+- `BiquadFilterNode` (crossfeed lowpass, ear training peaking EQ)
+- `OscillatorNode` / `GainNode` (binaural beats, channel balance)
+- Existing `FileDropZone`, `AudioPlayer`, `ToolPage`, `Slider`, `Button` components
+
+### Crossfeed Audio Graph
+```text
+FileSource -> ChannelSplitter(2)
+  Splitter[0] (L) -> LowpassFilter -> DelayNode -> CrossfeedGain -> Merger[1] (R)
+  Splitter[1] (R) -> LowpassFilter -> DelayNode -> CrossfeedGain -> Merger[0] (L)
+  Splitter[0] (L) -> DirectGain -> Merger[0] (L)
+  Splitter[1] (R) -> DirectGain -> Merger[1] (R)
+Merger -> Destination
+```
 
 ### Build Order
-Phase 1 (oscillator-based, simplest): Speaker Test, Subwoofer Test, Burn-in Generator, Turntable Test
-Phase 2 (static/reference): Surround Reference, dB Converter, Listening Monitor
-Phase 3 (analysis-based): ABX Test, Clipping Detector, IR Viewer, Room Analyzer, Bit-Perfect Test
-
+1. Binaural Beats, Channel Balance (simplest oscillator patterns)
+2. Soundstage Test (StereoPanner + HRTF PannerNode)
+3. Crossfeed Simulator (most complex audio graph)
+4. Ear Training (needs file loading + random EQ)
+5. Headphone Guide (static content, fastest to write)
