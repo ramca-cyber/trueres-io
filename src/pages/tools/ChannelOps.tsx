@@ -8,24 +8,26 @@ import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { useAudioPreview, type ChannelMode } from '@/hooks/use-audio-preview';
 import { channelArgs, type ChannelOp } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Play, Square } from 'lucide-react';
 
 const tool = getToolById('channel-ops')!;
 
-const OPS: { value: ChannelOp; label: string; desc: string }[] = [
-  { value: 'mono', label: 'Stereo → Mono', desc: 'Mix both channels to mono' },
-  { value: 'left', label: 'Extract Left', desc: 'Extract left channel only' },
-  { value: 'right', label: 'Extract Right', desc: 'Extract right channel only' },
-  { value: 'swap', label: 'Swap L/R', desc: 'Swap left and right channels' },
+const OPS: { value: ChannelOp; label: string; desc: string; previewMode: ChannelMode }[] = [
+  { value: 'mono', label: 'Stereo → Mono', desc: 'Mix both channels to mono', previewMode: 'mono' },
+  { value: 'left', label: 'Extract Left', desc: 'Extract left channel only', previewMode: 'left' },
+  { value: 'right', label: 'Extract Right', desc: 'Extract right channel only', previewMode: 'right' },
+  { value: 'swap', label: 'Swap L/R', desc: 'Swap left and right channels', previewMode: 'swap' },
 ];
 
 const ChannelOps = () => {
   const [file, setFile] = useState<File | null>(null);
   const [op, setOp] = useState<ChannelOp>('mono');
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { audioBuffer, isPlaying, decoding, playChannel, stop } = useAudioPreview(file);
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -36,6 +38,12 @@ const ChannelOps = () => {
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = channelArgs(inputName, outName, op);
     await process(file, inputName, outName, args);
+  };
+
+  const handlePreview = () => {
+    if (isPlaying) { stop(); return; }
+    const mode = OPS.find(o => o.value === op)?.previewMode ?? 'stereo';
+    playChannel(mode);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
@@ -66,12 +74,19 @@ const ChannelOps = () => {
           {processing && <ProgressBar value={progress} label="Processing..." sublabel={`${progress}%`} />}
           {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 flex-wrap">
+            {audioBuffer && (
+              <Button variant="secondary" onClick={handlePreview}>
+                {isPlaying ? <Square className="h-4 w-4 mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                {isPlaying ? 'Stop' : `Preview ${OPS.find(o => o.value === op)?.label}`}
+              </Button>
+            )}
+            {decoding && <span className="text-xs text-muted-foreground flex items-center"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Decoding...</span>}
             <Button onClick={handleProcess} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {loading ? 'Loading engine...' : processing ? 'Processing...' : 'Process'}
             </Button>
-            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
+            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); stop(); }}>Choose different file</Button>
           </div>
 
           {outputBlob && (
