@@ -1,11 +1,36 @@
+import { useEffect, useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
+import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { ProgressBar } from '@/components/shared/ProgressBar';
+import { MetricCard } from '@/components/display/MetricCard';
+import { VerdictBanner } from '@/components/display/VerdictBanner';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
+import { useAudioFile } from '@/hooks/use-audio-file';
+import { useAnalysis } from '@/hooks/use-analysis';
+import { type VerdictResult, type BitDepthResult, type BandwidthResult, type LossyDetectResult, type DynamicRangeResult } from '@/types/analysis';
 
 const tool = getToolById('hires-verifier')!;
 
 const HiResVerifier = () => {
+  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, decodeError } = useAudioFile();
+  const { runAnalysis, getResult } = useAnalysis();
+  const [analyzing, setAnalyzing] = useState(false);
+
+  // Run analyses when PCM is ready
+  useEffect(() => {
+    if (!pcm) return;
+    setAnalyzing(true);
+    runAnalysis('verdict').then(() => setAnalyzing(false));
+  }, [pcm, runAnalysis]);
+
+  const verdict = getResult<VerdictResult>('verdict');
+  const bitDepth = getResult<BitDepthResult>('bitDepth');
+  const bandwidth = getResult<BandwidthResult>('bandwidth');
+  const lossy = getResult<LossyDetectResult>('lossyDetect');
+  const dr = getResult<DynamicRangeResult>('dynamicRange');
+
   return (
     <ToolPage
       tool={tool}
@@ -15,20 +40,90 @@ const HiResVerifier = () => {
         { q: 'What formats are supported?', a: 'WAV, FLAC, AIFF, MP3, OGG, AAC, and M4A files can be analyzed.' },
       ]}
     >
-      <FileDropZone
-        accept={AUDIO_ACCEPT}
-        onFileSelect={(file) => {
-          console.log('File selected:', file.name);
-          // TODO: Wire up analysis engine
-        }}
-        label="Drop your audio file here"
-        sublabel="WAV, FLAC, AIFF, MP3, OGG, AAC, M4A"
-      />
+      {!fileName && (
+        <FileDropZone
+          accept={AUDIO_ACCEPT}
+          onFileSelect={loadFile}
+          label="Drop your audio file here"
+          sublabel="WAV, FLAC, AIFF, MP3, OGG, AAC, M4A"
+        />
+      )}
 
-      {/* Analysis results will render here once the engine is built */}
-      <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center text-muted-foreground text-sm">
-        Drop a file above to analyze it. Results will appear here.
-      </div>
+      {fileName && (
+        <div className="space-y-4">
+          <FileInfoBar
+            fileName={fileName}
+            fileSize={fileSize}
+            format={headerInfo?.format}
+            duration={headerInfo?.duration}
+            sampleRate={headerInfo?.sampleRate}
+            bitDepth={headerInfo?.bitDepth}
+            channels={headerInfo?.channels}
+          />
+
+          {decoding && (
+            <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />
+          )}
+
+          {decodeError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+              <p className="font-medium">Decode Error</p>
+              <p className="text-xs mt-1">{decodeError}</p>
+            </div>
+          )}
+
+          {analyzing && !verdict && (
+            <ProgressBar value={60} label="Analyzing..." sublabel="Running hi-res verification" />
+          )}
+
+          {verdict && <VerdictBanner verdict={verdict} />}
+
+          {(bitDepth || bandwidth || lossy || dr) && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {bitDepth && (
+                <MetricCard
+                  label="Effective Bit Depth"
+                  value={`${bitDepth.effectiveBitDepth}-bit`}
+                  subtext={`Reported: ${bitDepth.reportedBitDepth}-bit`}
+                  status={bitDepth.effectiveBitDepth >= bitDepth.reportedBitDepth ? 'pass' : 'fail'}
+                />
+              )}
+              {bandwidth && (
+                <MetricCard
+                  label="Freq Ceiling"
+                  value={`${(bandwidth.frequencyCeiling / 1000).toFixed(1)} kHz`}
+                  subtext={bandwidth.sourceGuess}
+                  status={bandwidth.isUpsampled ? 'fail' : 'pass'}
+                />
+              )}
+              {lossy && (
+                <MetricCard
+                  label="Lossy Artifacts"
+                  value={lossy.isLossy ? 'Detected' : 'None'}
+                  subtext={`${lossy.spectralHoles} spectral holes`}
+                  status={lossy.isLossy ? 'fail' : 'pass'}
+                />
+              )}
+              {dr && (
+                <MetricCard
+                  label="Dynamic Range"
+                  value={`DR${dr.drScore}`}
+                  subtext={`Peak: ${dr.peakDbfs.toFixed(1)} dBFS`}
+                  status={dr.drScore >= 10 ? 'pass' : dr.drScore >= 6 ? 'warn' : 'fail'}
+                />
+              )}
+            </div>
+          )}
+
+          {/* Reset button */}
+          <button
+            onClick={() => window.location.reload()}
+            className="text-xs text-muted-foreground hover:text-foreground underline"
+          >
+            Analyze another file
+          </button>
+        </div>
+      )}
     </ToolPage>
   );
 };
