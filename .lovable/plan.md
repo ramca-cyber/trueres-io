@@ -1,45 +1,105 @@
 
 
-# Fix: Audio Converter Not Working
+# Add Audio Player Across All Tools
 
-## Root Cause
+## Overview
 
-The Audio Converter fails silently because **`loadError` is never shown in the UI**. When ffmpeg.wasm fails to load (likely due to CORS or network issues fetching the WASM binary from unpkg.com), the error is captured in `loadError` state but `AudioConverter.tsx` only renders `processError` -- not `loadError`. This causes the exact behavior you described: button disables briefly, re-enables, and nothing happens with no visible feedback.
+Create a reusable `AudioPlayer` component and integrate it everywhere users work with audio -- both input files they drop in and output files they produce. Uses the native HTML `<audio>` element for maximum compatibility and simplicity.
 
-## Changes
+## New Component
 
-### 1. `src/pages/tools/AudioConverter.tsx`
-- Destructure `loadError` from `useFFmpeg()`
-- Display `loadError` alongside `processError` so users see what went wrong
-- Show a retry button when load fails
+### `src/components/shared/AudioPlayer.tsx`
 
-### 2. `src/hooks/use-ffmpeg.ts`
-- Fix the fragile `args[1]` input name extraction on line 55 -- instead, accept `inputName` as a separate parameter so it's explicit and not dependent on FFmpeg arg ordering
-- Update the `process` function signature to: `process(inputFile, inputName, outputName, args)`
+A minimal, styled audio player that accepts either a `File` or a `Blob`:
 
-### 3. `src/pages/tools/AudioConverter.tsx` (call site update)
-- Pass `inputName` explicitly to `process()` instead of relying on it being extracted from args
+- Native `<audio>` element with `controls` attribute (play/pause, scrub, volume, time display -- all handled by the browser)
+- Creates an object URL from the File/Blob via `URL.createObjectURL`, revokes it on cleanup
+- Compact design that fits inline with `FileInfoBar` and `DownloadButton`
+- Accepts an optional `label` prop (e.g. "Input" / "Output")
 
-### 4. Apply same `loadError` display fix to other FFmpeg-based tools
-- `VideoToMp3.tsx`, `VideoToAudio.tsx`, `VideoMute.tsx`, `VideoCompressor.tsx`, `VideoConverter.tsx`, `VideoToGif.tsx`, `VideoTrimmer.tsx`, `AudioTrimmer.tsx`, `AudioNormalizer.tsx`, `MetadataStripper.tsx`, `SampleRateConverter.tsx`, `ChannelOps.tsx` -- add `loadError` display wherever `useFFmpeg()` is used
+```text
+Props:
+  - src: File | Blob
+  - label?: string (e.g. "Preview", "Output")
+  - className?: string
+```
+
+## Integration Points
+
+### Input side (audio file dropped by user)
+
+Add the player right below `FileInfoBar` on these audio-input tools:
+
+| Tool | File |
+|------|------|
+| Audio Converter | `AudioConverter.tsx` |
+| Audio Trimmer | `AudioTrimmer.tsx` |
+| Audio Normalizer | `AudioNormalizer.tsx` |
+| Sample Rate Converter | `SampleRateConverter.tsx` |
+| Channel Ops | `ChannelOps.tsx` |
+| Metadata Stripper | `MetadataStripper.tsx` |
+| Tag Editor | `TagEditor.tsx` |
+| Waveform Viewer | `WaveformViewer.tsx` |
+| Waveform Image | `WaveformImage.tsx` |
+| Spectrogram Viewer | `SpectrogramViewer.tsx` |
+| Spectrum Analyzer | `SpectrumAnalyzer.tsx` |
+| Hi-Res Verifier | `HiResVerifier.tsx` |
+| Lossy Detector | `LossyDetector.tsx` |
+| LUFS Meter | `LufsMeter.tsx` |
+| Dynamic Range Meter | `DynamicRangeMeter.tsx` |
+| Stereo Analyzer | `StereoAnalyzer.tsx` |
+| File Inspector | `FileInspector.tsx` |
+| Audio Comparator | `AudioComparator.tsx` |
+| Batch Analyzer | `BatchAnalyzer.tsx` |
+
+Pattern: `<AudioPlayer src={file} label="Input" />` right after the `FileInfoBar`.
+
+### Output side (processed audio result)
+
+Add the player inside the output/download section on tools that produce audio output blobs:
+
+| Tool | File |
+|------|------|
+| Audio Converter | `AudioConverter.tsx` |
+| Audio Trimmer | `AudioTrimmer.tsx` |
+| Audio Normalizer | `AudioNormalizer.tsx` |
+| Sample Rate Converter | `SampleRateConverter.tsx` |
+| Channel Ops | `ChannelOps.tsx` |
+| Metadata Stripper | `MetadataStripper.tsx` |
+| Video to MP3 | `VideoToMp3.tsx` |
+| Video to Audio | `VideoToAudio.tsx` |
+
+Pattern: `<AudioPlayer src={outputBlob} label="Output" />` alongside the `DownloadButton`.
+
+### Tools that are skipped (video output or no file input)
+
+These tools produce video output or have no audio file -- no player needed:
+
+- Video Compressor, Video Converter, Video Trimmer, Video Mute, Video to GIF
+- Tone Generator, Noise Generator, Sweep Generator (already have their own oscillator-based playback)
+- DAC Test, Hearing Test (realtime oscillator playback)
+- Bitrate Calculator, Format Reference, Bluetooth Codecs (reference tools, no files)
 
 ## Technical Details
 
-**`use-ffmpeg.ts` process signature change:**
-```
-// Before
-process(inputFile: File, outputName: string, args: string[])
+### Component implementation
 
-// After  
-process(inputFile: File, inputName: string, outputName: string, args: string[])
-```
-
-This eliminates the brittle `args[1]` extraction that assumes the FFmpeg input filename is always the second argument.
-
-**Error display pattern (added to all FFmpeg tool pages):**
 ```tsx
-{(processError || loadError) && (
-  <p className="text-sm text-destructive">{processError || loadError}</p>
-)}
+// AudioPlayer.tsx
+- useEffect with URL.createObjectURL / URL.revokeObjectURL lifecycle
+- Native <audio controls> element -- no custom UI needed
+- Styled with rounded border, bg-card to match existing card style
+- preload="metadata" for instant duration display without loading full file
 ```
+
+### Memory management
+
+- Object URLs are created on mount/prop change and revoked on cleanup
+- Uses `useEffect` dependency on `src` to handle file changes correctly
+
+### Styling
+
+- Matches the existing card/border pattern used by `FileInfoBar` and output result sections
+- `<audio>` element set to `w-full` so it stretches to fill its container
+- Optional label displayed as small text above the player
 
