@@ -9,10 +9,22 @@ const WASM_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.was
 
 export type FFmpegProgressCallback = (progress: number) => void;
 
+const LOAD_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. This may be due to browser limitations (SharedArrayBuffer not available). Try using Chrome or Firefox with proper CORS headers.`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
 /**
  * Get or initialize the FFmpeg instance (singleton, lazy-loaded)
  */
-export async function getFFmpeg(onProgress?: FFmpegProgressCallback): Promise<FFmpeg> {
+export async function getFFmpeg(): Promise<FFmpeg> {
   if (ffmpegInstance?.loaded) return ffmpegInstance;
 
   if (loadPromise) return loadPromise;
@@ -20,20 +32,15 @@ export async function getFFmpeg(onProgress?: FFmpegProgressCallback): Promise<FF
   loadPromise = (async () => {
     const ffmpeg = new FFmpeg();
 
-    if (onProgress) {
-      ffmpeg.on('progress', ({ progress }) => {
-        onProgress(Math.round(progress * 100));
-      });
-    }
-
     // Load with CDN-hosted core to avoid CORS/bundling issues
     const coreURL = await toBlobURL(CORE_URL, 'text/javascript');
     const wasmURL = await toBlobURL(WASM_URL, 'application/wasm');
 
-    await ffmpeg.load({
-      coreURL,
-      wasmURL,
-    });
+    await withTimeout(
+      ffmpeg.load({ coreURL, wasmURL }),
+      LOAD_TIMEOUT_MS,
+      'FFmpeg engine load',
+    );
 
     ffmpegInstance = ffmpeg;
     return ffmpeg;
