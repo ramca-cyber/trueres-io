@@ -10,6 +10,7 @@ import { DownloadButton } from '@/components/shared/DownloadButton';
 import { generateTone } from '@/engines/analysis/generators/tone';
 import { encodeWav } from '@/engines/analysis/generators/wav-encoder';
 import { Play, Square } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('tone-generator')!;
 
@@ -25,15 +26,17 @@ const ToneGenerator = () => {
 
   const amplitude = Math.pow(10, level[0] / 20);
 
-  // Cleanup AudioContext on unmount
   useEffect(() => {
+    registerCallback('tone-generator', stopPlayback);
     return () => {
       oscRef.current?.stop();
       audioCtxRef.current?.close();
+      unregisterCallback('tone-generator');
     };
   }, []);
 
   const startPlayback = useCallback(() => {
+    notifyPlayStart('tone-generator');
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();

@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { generateNoise } from '@/engines/analysis/generators/noise';
 import { Play, Square, AlertTriangle } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('burn-in-generator')!;
 
@@ -38,8 +39,10 @@ const BurnInGenerator = () => {
   const totalSeconds = parseFloat(duration) * 3600;
 
   useEffect(() => {
+    registerCallback('burn-in-generator', stopAll);
     return () => {
       stopAll();
+      unregisterCallback('burn-in-generator');
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -85,6 +88,7 @@ const BurnInGenerator = () => {
   }, [amplitude]);
 
   const startBurnIn = useCallback(() => {
+    notifyPlayStart('burn-in-generator');
     stopAll();
     playingRef.current = true;
     const ctx = new AudioContext();

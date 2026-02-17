@@ -6,6 +6,7 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Play, Square, Volume2, Timer } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('binaural-beats')!;
 
@@ -57,6 +58,7 @@ export default function BinauralBeats() {
   }, []);
 
   const start = useCallback(() => {
+    notifyPlayStart('binaural-beats');
     const ctx = new AudioContext();
     ctxRef.current = ctx;
 
@@ -104,7 +106,10 @@ export default function BinauralBeats() {
     if (gainRef.current) gainRef.current.gain.value = volume / 100;
   }, [volume]);
 
-  useEffect(() => () => { stop(); }, [stop]);
+  useEffect(() => {
+    registerCallback('binaural-beats', stop);
+    return () => { stop(); unregisterCallback('binaural-beats'); };
+  }, [stop]);
 
   return (
     <ToolPage tool={tool}>

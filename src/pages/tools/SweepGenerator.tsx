@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { Play, Square } from 'lucide-react';
+import { registerCallback, unregisterCallback, notifyPlayStart } from '@/lib/playback-manager';
 
 const tool = getToolById('sweep-generator')!;
 
@@ -23,11 +24,17 @@ const SweepGenerator = () => {
   const audioCtxRef = useRef<AudioContext | null>(null);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Cleanup AudioContext on unmount
+  const stopSweep = useCallback(() => {
+    try { sourceRef.current?.stop(); } catch {}
+    setPlaying(false);
+  }, []);
+
   useEffect(() => {
+    registerCallback('sweep-generator', stopSweep);
     return () => {
       try { sourceRef.current?.stop(); } catch {}
       audioCtxRef.current?.close();
+      unregisterCallback('sweep-generator');
     };
   }, []);
 
@@ -38,6 +45,7 @@ const SweepGenerator = () => {
       return;
     }
 
+    notifyPlayStart('sweep-generator');
     const ctx = audioCtxRef.current || new AudioContext();
     audioCtxRef.current = ctx;
 
