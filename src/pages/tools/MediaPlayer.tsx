@@ -378,8 +378,20 @@ export default function MediaPlayer() {
   const cycleLoop = useCallback(() => setLoopMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'), []);
 
   const handleMinimize = useCallback(() => {
-    if (queue.length > 0) { miniPlayer.activate(queue, currentIndex); miniPlayer.setPlaying(true); }
+    if (queue.length > 0) {
+      const el = audioRef.current || videoRef.current;
+      if (el) el.pause();
+      miniPlayer.activate(queue, currentIndex);
+      miniPlayer.setPlaying(true);
+    }
   }, [queue, currentIndex, miniPlayer]);
+
+  // Deactivate MiniPlayer when MediaPlayer mounts to prevent overlap
+  useEffect(() => {
+    if (miniPlayer.active) {
+      miniPlayer.deactivate();
+    }
+  }, []);
 
   // ── Export playlist ──
   const handleExportPlaylist = useCallback(() => {
