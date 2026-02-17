@@ -10,7 +10,8 @@ import { getToolById } from '@/config/tool-registry';
 import { SAMPLE_RATES, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useBatchProcess } from '@/hooks/use-batch-process';
-import { resampleArgs } from '@/engines/processing/presets';
+import { resampleArgs, injectGainFilter } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
@@ -21,6 +22,7 @@ const tool = getToolById('sample-rate-converter')!;
 const SampleRateConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [targetRate, setTargetRate] = useState('48000');
+  const [gainDb, setGainDb] = useState(0);
   const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -44,16 +46,16 @@ const SampleRateConverter = () => {
     const baseName = f.name.replace(/\.[^.]+$/, '');
     const outName = `${baseName}_${(parseInt(targetRate) / 1000).toFixed(1)}kHz.${ext}`;
     const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = resampleArgs(inputName, outName, parseInt(targetRate));
+    const args = injectGainFilter(resampleArgs(inputName, outName, parseInt(targetRate)), gainDb);
     return { inputName, outputName: outName, args };
-  }, [targetRate]);
+  }, [targetRate, gainDb]);
 
   const handleResample = async () => {
     if (!file) return;
     const ext = file.name.split('.').pop() || 'wav';
     const outName = `resampled.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = resampleArgs(inputName, outName, parseInt(targetRate));
+    const args = injectGainFilter(resampleArgs(inputName, outName, parseInt(targetRate)), gainDb);
     await process(file, inputName, outName, args);
   };
 
@@ -102,6 +104,7 @@ const SampleRateConverter = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <AudioPlayer src={file!} label="Input" />
           {settingsPanel}
+          <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Resampling..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (

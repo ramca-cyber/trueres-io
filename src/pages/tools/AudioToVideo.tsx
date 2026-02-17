@@ -8,7 +8,9 @@ import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, IMAGE_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
-import { audioToVideoArgs } from '@/engines/processing/presets';
+import { audioToVideoArgs, injectGainFilter } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
+import { useAudioPreview } from '@/hooks/use-audio-preview';
 import { writeInputFile } from '@/engines/processing/ffmpeg-manager';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -28,6 +30,7 @@ const AudioToVideo = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [resolution, setResolution] = useState('1920x1080');
+  const [gainDb, setGainDb] = useState(0);
 
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
@@ -61,7 +64,7 @@ const AudioToVideo = () => {
       await writeInputFile(imageInputName, imageFile);
     }
 
-    const args = audioToVideoArgs(audioInputName, imageInputName, outputName, w, h);
+    const args = injectGainFilter(audioToVideoArgs(audioInputName, imageInputName, outputName, w, h), gainDb);
     await process(audioFile, audioInputName, outputName, args);
   }, [audioFile, imageFile, resolution, process]);
 
@@ -81,6 +84,7 @@ const AudioToVideo = () => {
         <div className="space-y-4">
           <FileInfoBar fileName={audioFile.name} fileSize={audioFile.size} />
           <AudioPlayer src={audioFile} label="Input audio" />
+          <GainControl file={audioFile} gainDb={gainDb} onGainChange={setGainDb} />
 
           {/* Background image (optional) */}
           <div className="space-y-2">

@@ -218,3 +218,19 @@ export function videoConvertArgs(
   }
   return ['-i', inputName, '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', outputName];
 }
+
+// ── Gain injection utility ──
+
+export function injectGainFilter(args: string[], gainDb: number): string[] {
+  if (gainDb === 0) return args;
+  const volumeFilter = `volume=${gainDb}dB`;
+  const result = [...args];
+  const afIndex = result.indexOf('-af');
+  if (afIndex !== -1 && afIndex + 1 < result.length) {
+    result[afIndex + 1] = `${result[afIndex + 1]},${volumeFilter}`;
+  } else {
+    // Insert before the last arg (output filename)
+    result.splice(result.length - 1, 0, '-af', volumeFilter);
+  }
+  return result;
+}

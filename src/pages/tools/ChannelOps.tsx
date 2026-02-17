@@ -11,7 +11,8 @@ import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useBatchProcess } from '@/hooks/use-batch-process';
 import { useAudioPreview, type ChannelMode } from '@/hooks/use-audio-preview';
-import { channelArgs, type ChannelOp } from '@/engines/processing/presets';
+import { channelArgs, injectGainFilter, type ChannelOp } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Play, Square } from 'lucide-react';
@@ -29,6 +30,7 @@ const OPS: { value: ChannelOp; label: string; desc: string; previewMode: Channel
 const ChannelOps = () => {
   const [file, setFile] = useState<File | null>(null);
   const [op, setOp] = useState<ChannelOp>('mono');
+  const [gainDb, setGainDb] = useState(0);
   const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,16 +55,16 @@ const ChannelOps = () => {
     const baseName = f.name.replace(/\.[^.]+$/, '');
     const outName = `${baseName}_${op}.${ext}`;
     const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = channelArgs(inputName, outName, op);
+    const args = injectGainFilter(channelArgs(inputName, outName, op), gainDb);
     return { inputName, outputName: outName, args };
-  }, [op]);
+  }, [op, gainDb]);
 
   const handleProcess = async () => {
     if (!file) return;
     const ext = file.name.split('.').pop() || 'wav';
     const outName = `channels.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = channelArgs(inputName, outName, op);
+    const args = injectGainFilter(channelArgs(inputName, outName, op), gainDb);
     await process(file, inputName, outName, args);
   };
 
@@ -118,6 +120,7 @@ const ChannelOps = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <AudioPlayer src={file!} label="Input" />
           {settingsPanel}
+          <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Processing..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (

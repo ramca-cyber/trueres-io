@@ -10,7 +10,8 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useBatchProcess } from '@/hooks/use-batch-process';
-import { stripMetadataArgs } from '@/engines/processing/presets';
+import { stripMetadataArgs, injectGainFilter } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
 import { Button } from '@/components/ui/button';
 import { Loader2, ShieldCheck } from 'lucide-react';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
@@ -19,6 +20,7 @@ const tool = getToolById('metadata-stripper')!;
 
 const MetadataStripper = () => {
   const [file, setFile] = useState<File | null>(null);
+  const [gainDb, setGainDb] = useState(0);
   const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -42,16 +44,16 @@ const MetadataStripper = () => {
     const baseName = f.name.replace(/\.[^.]+$/, '');
     const outName = `${baseName}_clean.${ext}`;
     const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = stripMetadataArgs(inputName, outName);
+    const args = injectGainFilter(stripMetadataArgs(inputName, outName), gainDb);
     return { inputName, outputName: outName, args };
-  }, []);
+  }, [gainDb]);
 
   const handleStrip = async () => {
     if (!file) return;
     const ext = file.name.split('.').pop() || 'mp3';
     const outName = `stripped.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = stripMetadataArgs(inputName, outName);
+    const args = injectGainFilter(stripMetadataArgs(inputName, outName), gainDb);
     await process(file, inputName, outName, args);
   };
 
@@ -99,6 +101,7 @@ const MetadataStripper = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <AudioPlayer src={file!} label="Input" />
           {infoPanel}
+          <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Stripping metadata..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (

@@ -10,7 +10,8 @@ import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useBatchProcess } from '@/hooks/use-batch-process';
-import { audioConvertArgs, AUDIO_OUTPUT_FORMATS, MP3_BITRATES } from '@/engines/processing/presets';
+import { audioConvertArgs, AUDIO_OUTPUT_FORMATS, MP3_BITRATES, injectGainFilter } from '@/engines/processing/presets';
+import { GainControl } from '@/components/shared/GainControl';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
@@ -22,6 +23,7 @@ const AudioConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [outputFormat, setOutputFormat] = useState('mp3');
   const [bitrate, setBitrate] = useState(320);
+  const [gainDb, setGainDb] = useState(0);
   const addMoreRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,16 +48,16 @@ const AudioConverter = () => {
     const baseName = f.name.replace(/\.[^.]+$/, '');
     const outName = `${baseName}.${ext}`;
     const inputName = `input_${f.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = audioConvertArgs(inputName, outName, outputFormat, bitrate);
+    const args = injectGainFilter(audioConvertArgs(inputName, outName, outputFormat, bitrate), gainDb);
     return { inputName, outputName: outName, args };
-  }, [outputFormat, bitrate]);
+  }, [outputFormat, bitrate, gainDb]);
 
   const handleConvert = async () => {
     if (!file) return;
     const fmt = AUDIO_OUTPUT_FORMATS.find((f) => f.value === outputFormat);
     const outName = `output.${fmt?.ext || 'mp3'}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
-    const args = audioConvertArgs(inputName, outName, outputFormat, bitrate);
+    const args = injectGainFilter(audioConvertArgs(inputName, outName, outputFormat, bitrate), gainDb);
     await process(file, inputName, outName, args);
   };
 
@@ -125,6 +127,7 @@ const AudioConverter = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <AudioPlayer src={file!} label="Input" />
           {settingsPanel}
+          <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Converting..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
