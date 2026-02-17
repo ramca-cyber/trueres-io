@@ -8,13 +8,15 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { SpectrogramCanvas } from '@/components/visualizations/SpectrogramCanvas';
 import { Slider } from '@/components/ui/slider';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT, FFT_SIZES, COLORMAPS, type Colormap } from '@/config/constants';
+import { AUDIO_ACCEPT, COLORMAPS, type Colormap } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
-import { type SpectrogramData } from '@/types/analysis';
+import { type SpectrogramData, type BandwidthResult } from '@/types/analysis';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const tool = getToolById('spectrogram')!;
 
@@ -29,12 +31,16 @@ const SpectrogramViewer = () => {
   const [colormap, setColormap] = useState<Colormap>('magma');
   const [minDb, setMinDb] = useState(-120);
   const [maxDb, setMaxDb] = useState(0);
+  const [showCeiling, setShowCeiling] = useState(true);
+  const [showCdNyquist, setShowCdNyquist] = useState(true);
 
   const spectrogramData = getResult<SpectrogramData & { type: string; timestamp: number; duration: number }>('spectrogram');
+  const bandwidthData = getResult<BandwidthResult>('bandwidth');
 
   useEffect(() => {
     if (pcm) {
       runAnalysis('spectrogram');
+      runAnalysis('bandwidth');
     }
   }, [pcm, runAnalysis]);
 
@@ -45,6 +51,8 @@ const SpectrogramViewer = () => {
       </ToolPage>
     );
   }
+
+  const isHiRes = headerInfo && headerInfo.sampleRate > 48000;
 
   return (
     <ToolPage tool={tool}>
@@ -106,6 +114,20 @@ const SpectrogramViewer = () => {
                 />
                 <span className="text-xs font-mono text-muted-foreground w-10">{maxDb}</span>
               </div>
+
+              {bandwidthData && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={showCeiling} onCheckedChange={setShowCeiling} id="show-ceiling" />
+                  <Label htmlFor="show-ceiling" className="text-sm">Bandwidth ceiling</Label>
+                </div>
+              )}
+
+              {isHiRes && (
+                <div className="flex items-center gap-2">
+                  <Switch checked={showCdNyquist} onCheckedChange={setShowCdNyquist} id="show-cd" />
+                  <Label htmlFor="show-cd" className="text-sm">CD Nyquist</Label>
+                </div>
+              )}
             </div>
 
             <SpectrogramCanvas
@@ -113,7 +135,17 @@ const SpectrogramViewer = () => {
               colormap={colormap}
               minDb={minDb}
               maxDb={maxDb}
+              ceilingHz={showCeiling ? bandwidthData?.frequencyCeiling : undefined}
+              showCdNyquist={showCdNyquist && !!isHiRes}
             />
+
+            {bandwidthData && (
+              <p className="text-xs text-muted-foreground">
+                Bandwidth ceiling: <span className="font-mono font-medium text-foreground">{bandwidthData.frequencyCeiling >= 1000 ? `${(bandwidthData.frequencyCeiling / 1000).toFixed(1)} kHz` : `${Math.round(bandwidthData.frequencyCeiling)} Hz`}</span>
+                {' · '}
+                {bandwidthData.sourceGuess}
+              </p>
+            )}
           </>
         )}
 

@@ -61,50 +61,98 @@ export function analyzeBandwidth(
     avgDb[i] = avgPower[i] > 0 ? 10 * Math.log10(avgPower[i]) : -160;
   }
 
-  // Find noise floor (median of bottom 20% of spectrum)
+  // Find noise floor (median of bottom 10% of spectrum)
   const sorted = Array.from(avgDb).sort((a, b) => a - b);
   const noiseFloor = sorted[Math.floor(sorted.length * 0.1)];
 
-  // Find frequency ceiling: highest frequency significantly above noise floor
-  const threshold = noiseFloor + 10; // 10dB above noise floor
+  // Adaptive ceiling detection:
+  // Instead of a fixed 10dB threshold, look for the spectral cliff —
+  // a sharp drop in energy over a narrow frequency range.
+  const smoothWindow = 8; // bins to smooth over
+  const smoothDb = new Float64Array(halfFFT);
+  for (let i = 0; i < halfFFT; i++) {
+    let sum = 0, count = 0;
+    for (let j = Math.max(0, i - smoothWindow); j <= Math.min(halfFFT - 1, i + smoothWindow); j++) {
+      sum += avgDb[j];
+      count++;
+    }
+    smoothDb[i] = sum / count;
+  }
+
+  // Find ceiling: scan from top, look for where smoothed energy drops
+  // sharply (cliff) OR falls below noise floor + 6dB (gentle rolloff)
+  const cliffThreshold = 15; // dB drop over cliffWindow bins = brick-wall cutoff
+  const cliffWindow = 10;
+  const gentleThreshold = noiseFloor + 6;
+
   let ceilingBin = halfFFT - 1;
-  for (let i = halfFFT - 1; i >= 0; i--) {
-    if (avgDb[i] > threshold) {
-      ceilingBin = i;
+  let cutoffType: 'cliff' | 'gradual' = 'gradual';
+
+  // First pass: look for a spectral cliff (sharp cutoff = lossy encoding)
+  for (let i = halfFFT - cliffWindow - 1; i >= cliffWindow; i--) {
+    const drop = smoothDb[i] - smoothDb[i + cliffWindow];
+    if (drop > cliffThreshold && smoothDb[i] > noiseFloor + 15) {
+      ceilingBin = i + Math.floor(cliffWindow / 2);
+      cutoffType = 'cliff';
       break;
+    }
+  }
+
+  // If no cliff found, use the gentle threshold approach
+  if (cutoffType === 'gradual') {
+    for (let i = halfFFT - 1; i >= 0; i--) {
+      if (smoothDb[i] > gentleThreshold) {
+        ceilingBin = i;
+        break;
+      }
     }
   }
 
   const frequencyCeiling = (ceilingBin / halfFFT) * nyquist;
 
-  // Cutoff sharpness: how fast does signal drop at the ceiling?
+  // Cutoff sharpness: measure dB/octave drop rate at the ceiling
   const windowSize = Math.min(20, halfFFT - ceilingBin);
   let dropRate = 0;
   if (windowSize > 2) {
-    const before = avgDb[Math.max(0, ceilingBin - windowSize)];
-    const after = avgDb[Math.min(halfFFT - 1, ceilingBin + windowSize)];
+    const before = smoothDb[Math.max(0, ceilingBin - windowSize)];
+    const after = smoothDb[Math.min(halfFFT - 1, ceilingBin + windowSize)];
     dropRate = before - after;
   }
 
-  // Guess source based on ceiling
+  // Source guess: combine ceiling frequency + cutoff type for better accuracy
   let sourceGuess = 'Unknown';
   let isUpsampled = false;
 
-  if (frequencyCeiling < 16500 && sampleRate >= 44100) {
-    sourceGuess = 'MP3/AAC (≤128kbps)';
-    isUpsampled = true;
-  } else if (frequencyCeiling < 18000 && sampleRate >= 44100) {
-    sourceGuess = 'Lossy (likely MP3/OGG ≤192kbps)';
-    isUpsampled = true;
-  } else if (frequencyCeiling < 20500 && sampleRate >= 44100) {
-    sourceGuess = 'CD-quality or high-bitrate lossy';
-    isUpsampled = sampleRate > 48000;
-  } else if (frequencyCeiling < 24000 && sampleRate > 48000) {
-    sourceGuess = 'Likely 48kHz source';
-    isUpsampled = sampleRate > 48000;
+  if (cutoffType === 'cliff') {
+    // Sharp cutoff strongly indicates lossy encoding
+    if (frequencyCeiling < 16500) {
+      sourceGuess = 'MP3/AAC (≤128kbps)';
+      isUpsampled = true;
+    } else if (frequencyCeiling < 18000) {
+      sourceGuess = 'Lossy (likely MP3/OGG ≤192kbps)';
+      isUpsampled = true;
+    } else if (frequencyCeiling < 20500) {
+      sourceGuess = 'Lossy (high-bitrate MP3/AAC)';
+      isUpsampled = sampleRate > 48000;
+    } else if (frequencyCeiling < 24000 && sampleRate > 48000) {
+      sourceGuess = 'Likely 48kHz source (brick-wall at ceiling)';
+      isUpsampled = true;
+    } else {
+      sourceGuess = 'High-resolution content';
+      isUpsampled = false;
+    }
   } else {
-    sourceGuess = 'Genuine high-resolution content';
-    isUpsampled = false;
+    // Gradual rolloff — more likely genuine content
+    if (frequencyCeiling < 16000 && sampleRate >= 44100) {
+      sourceGuess = 'Likely lossy source (low bandwidth)';
+      isUpsampled = true;
+    } else if (frequencyCeiling < 20000 && sampleRate > 48000) {
+      sourceGuess = 'CD-quality content (gradual rolloff)';
+      isUpsampled = true;
+    } else {
+      sourceGuess = 'Genuine high-resolution content';
+      isUpsampled = false;
+    }
   }
 
   const confidence = Math.min(100, Math.round(frameCount / 2 * 10));
