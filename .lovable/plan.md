@@ -1,41 +1,78 @@
 
 
-# Fix: Prevent All Simultaneous Audio/Video Playback
+# Audit: Remaining Simultaneous Playback Issues
 
-## Problem
-Multiple audio and video players across the app can play at the same time. This happens in:
-- Tool pages with both Input and Output previews (12 pages)
-- The Audio Comparator with two side-by-side previews
-- The MiniPlayer overlapping with any page's player
+## What's Already Fixed
+The `playback-manager.ts` correctly coordinates all `HTMLMediaElement`-based players (AudioPlayer, VideoPlayer, MiniPlayer). Any page with multiple `<audio>`/`<video>` elements is handled.
 
-## Solution
-Create a lightweight global playback manager that ensures only one media element plays at a time, app-wide. Every AudioPlayer, VideoPlayer, and MiniPlayer will register with this manager. When any element starts playing, all others are automatically paused.
+## What's NOT Covered
 
-This is a single shared module + small additions to 3 existing components. No changes needed to individual tool pages.
+### Issue 1: `useAudioPreview` hook
+Used in AudioTrimmer, AudioNormalizer, and ChannelOps. This hook plays audio via `AudioBufferSourceNode` (Web Audio API), not an `<audio>` element. It cannot be registered with the current playback manager.
 
-## Technical Details
+**Conflict scenario**: User clicks "Preview" (useAudioPreview) while the output AudioPlayer is also playing on the same page, or while the MiniPlayer is active.
 
-### 1. New file: `src/lib/playback-manager.ts`
-A singleton module that:
-- Maintains a `Set<HTMLMediaElement>` of all registered media elements
-- Provides `register(el)` and `unregister(el)` functions
-- Listens for the native `play` event on each registered element
-- When a `play` event fires, pauses all *other* registered elements
-- Simple, framework-agnostic, no React state needed
+**Fix**: Extend `playback-manager.ts` to support a generic "stop callback" registration alongside HTMLMediaElements. The `useAudioPreview` hook registers a `stop()` callback. When any HTMLMediaElement plays, all registered callbacks are called (and vice versa).
 
-### 2. Modified: `src/components/shared/AudioPlayer.tsx`
-- Import `register`/`unregister` from playback-manager
-- In the existing mount effect, call `register(innerRef.current)`
-- On unmount, call `unregister(innerRef.current)`
-- This is roughly 4 lines of code added
+Changes:
+- `src/lib/playback-manager.ts` -- add `registerCallback(id, stopFn)` and `unregisterCallback(id)`. When any element plays or callback-based source starts, pause/stop everything else.
+- `src/hooks/use-audio-preview.ts` -- register its `stop()` function on mount, unregister on unmount. Before playing, call a `notifyPlayStart(id)` function from the manager.
 
-### 3. Modified: `src/components/shared/VideoPlayer.tsx`
-- Same pattern: register/unregister the `<video>` element on mount/unmount
+### Issue 2: Generator/Test Pages
+Pages like ToneGenerator, NoiseGenerator, HearingTest, BinauralBeats, EarTraining, ChannelBalance, BurnInGenerator, ABXTest, and SweepGenerator use raw oscillators or AudioBufferSourceNodes.
 
-### 4. Modified: `src/components/shared/MiniPlayer.tsx`
-- Same pattern: register/unregister its `<audio>` element on mount/unmount
+**Conflict scenario**: User has the MiniPlayer active, navigates to ToneGenerator, and clicks Play -- both play at once.
 
-### How it works
-When the user clicks play on any player anywhere in the app, the browser fires a native `play` event. The playback manager catches it and calls `.pause()` on every other registered element. This covers all combinations: Input vs Output, page player vs MiniPlayer, File A vs File B in comparator, etc.
+**Fix**: Same pattern. Each generator page registers a stop callback with the playback manager and calls `notifyPlayStart` before starting its oscillator/source.
 
-No changes are needed to any of the 12+ tool pages -- it all works automatically through the shared components.
+Changes (each file gets ~4 lines added):
+- `src/pages/tools/ToneGenerator.tsx`
+- `src/pages/tools/NoiseGenerator.tsx`
+- `src/pages/tools/HearingTest.tsx`
+- `src/pages/tools/BinauralBeats.tsx`
+- `src/pages/tools/EarTraining.tsx`
+- `src/pages/tools/ChannelBalance.tsx`
+- `src/pages/tools/BurnInGenerator.tsx`
+- `src/pages/tools/ABXTest.tsx`
+- `src/pages/tools/SweepGenerator.tsx`
+
+## Technical Design
+
+### Updated `playback-manager.ts`
+
+```text
+Elements Set (HTMLMediaElement)         Callbacks Map (id -> stopFn)
+         |                                        |
+         +------------- on play ----------------+
+         |   pause all other elements            |
+         |   call all registered stop callbacks  |
+         +---------------------------------------+
+
+notifyPlayStart(id)  -->  pause all elements
+                          call all other callbacks
+```
+
+Three exports added:
+- `registerCallback(id: string, stopFn: () => void)` -- for Web Audio sources
+- `unregisterCallback(id: string)` -- cleanup
+- `notifyPlayStart(id: string)` -- called before a Web Audio source starts playing; pauses all HTMLMediaElements and calls all other registered stop callbacks
+
+The existing `register`/`unregister` for HTMLMediaElements stays unchanged. The `onPlay` handler is updated to also invoke all registered stop callbacks.
+
+### Integration Pattern (example for ToneGenerator)
+
+```
+// In startPlayback:
+notifyPlayStart('tone-generator');
+
+// In useEffect on mount:
+registerCallback('tone-generator', stopPlayback);
+return () => unregisterCallback('tone-generator');
+```
+
+## Summary
+
+- 1 file modified: `src/lib/playback-manager.ts` (add callback support)
+- 1 hook modified: `src/hooks/use-audio-preview.ts`
+- 9 pages modified: each generator/test page (roughly 4 lines each)
+- Result: only one sound source plays at any time, app-wide
