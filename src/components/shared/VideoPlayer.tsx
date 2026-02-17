@@ -4,10 +4,12 @@ interface VideoPlayerProps {
   src: File | Blob;
   label?: string;
   className?: string;
+  onEnded?: () => void;
+  autoPlay?: boolean;
 }
 
 export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
-  ({ src, label, className }, ref) => {
+  ({ src, label, className, onEnded, autoPlay }, ref) => {
     const [url, setUrl] = useState<string>('');
 
     useEffect(() => {
@@ -27,6 +29,8 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           preload="metadata"
           src={url}
           className="w-full max-h-[360px] rounded-md [color-scheme:dark]"
+          onEnded={onEnded}
+          autoPlay={autoPlay}
         />
       </div>
     );
