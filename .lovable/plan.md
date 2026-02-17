@@ -1,54 +1,41 @@
 
 
-# Fix: Prevent Simultaneous Audio Playback
+# Fix: Prevent All Simultaneous Audio/Video Playback
 
 ## Problem
-When the mini player is opened (via the minimize button), both the full MediaPlayer and the MiniPlayer play audio at the same time. The same can happen in reverse when navigating back from the mini player to the full player.
+Multiple audio and video players across the app can play at the same time. This happens in:
+- Tool pages with both Input and Output previews (12 pages)
+- The Audio Comparator with two side-by-side previews
+- The MiniPlayer overlapping with any page's player
 
-## Root Cause
-- The "minimize" action activates the MiniPlayer but never pauses the MediaPlayer's audio/video element
-- The "maximize" action (clicking the expand button on MiniPlayer) navigates to `/media-player` but never deactivates the MiniPlayer
-- No coordination exists between the two playback sources
+## Solution
+Create a lightweight global playback manager that ensures only one media element plays at a time, app-wide. Every AudioPlayer, VideoPlayer, and MiniPlayer will register with this manager. When any element starts playing, all others are automatically paused.
 
-## Fix (3 changes, 2 files)
+This is a single shared module + small additions to 3 existing components. No changes needed to individual tool pages.
 
-### 1. MediaPlayer: Pause before minimizing
-In `handleMinimize`, pause the current audio/video element before activating the MiniPlayer:
+## Technical Details
 
-```
-const handleMinimize = useCallback(() => {
-  if (queue.length > 0) {
-    // Pause current playback first
-    const el = audioRef.current || videoRef.current;
-    if (el) el.pause();
-    miniPlayer.activate(queue, currentIndex);
-    miniPlayer.setPlaying(true);
-  }
-}, [queue, currentIndex, miniPlayer]);
-```
+### 1. New file: `src/lib/playback-manager.ts`
+A singleton module that:
+- Maintains a `Set<HTMLMediaElement>` of all registered media elements
+- Provides `register(el)` and `unregister(el)` functions
+- Listens for the native `play` event on each registered element
+- When a `play` event fires, pauses all *other* registered elements
+- Simple, framework-agnostic, no React state needed
 
-### 2. MediaPlayer: Deactivate MiniPlayer on mount
-When the MediaPlayer page mounts (or when the component has an active queue), deactivate the MiniPlayer to prevent overlap:
+### 2. Modified: `src/components/shared/AudioPlayer.tsx`
+- Import `register`/`unregister` from playback-manager
+- In the existing mount effect, call `register(innerRef.current)`
+- On unmount, call `unregister(innerRef.current)`
+- This is roughly 4 lines of code added
 
-```
-useEffect(() => {
-  if (miniPlayer.active) {
-    miniPlayer.deactivate();
-  }
-}, []); // on mount only
-```
+### 3. Modified: `src/components/shared/VideoPlayer.tsx`
+- Same pattern: register/unregister the `<video>` element on mount/unmount
 
-### 3. MiniPlayer: Pause before navigating to full player
-In the MiniPlayer's "maximize" button handler, deactivate (which stops its audio) before navigating:
+### 4. Modified: `src/components/shared/MiniPlayer.tsx`
+- Same pattern: register/unregister its `<audio>` element on mount/unmount
 
-```
-// Currently:
-onClick={() => navigate('/media-player')}
+### How it works
+When the user clicks play on any player anywhere in the app, the browser fires a native `play` event. The playback manager catches it and calls `.pause()` on every other registered element. This covers all combinations: Input vs Output, page player vs MiniPlayer, File A vs File B in comparator, etc.
 
-// Fixed:
-onClick={() => { deactivate(); navigate('/media-player'); }}
-```
-
-## Files Changed
-- `src/pages/tools/MediaPlayer.tsx` -- pause before minimize + deactivate MiniPlayer on mount
-- `src/components/shared/MiniPlayer.tsx` -- deactivate before navigating to full player
+No changes are needed to any of the 12+ tool pages -- it all works automatically through the shared components.
