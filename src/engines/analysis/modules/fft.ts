@@ -21,16 +21,24 @@ export function fft(real: Float64Array, imag: Float64Array): void {
     j += k;
   }
 
-  // Butterfly computation
+  // Butterfly computation with pre-computed twiddle factors
   for (let len = 2; len <= N; len <<= 1) {
     const halfLen = len >> 1;
     const angle = (-2 * Math.PI) / len;
 
+    // Pre-compute trig table once per stage
+    const cosTable = new Float64Array(halfLen);
+    const sinTable = new Float64Array(halfLen);
+    for (let k = 0; k < halfLen; k++) {
+      const theta = angle * k;
+      cosTable[k] = Math.cos(theta);
+      sinTable[k] = Math.sin(theta);
+    }
+
     for (let i = 0; i < N; i += len) {
       for (let k = 0; k < halfLen; k++) {
-        const theta = angle * k;
-        const cos = Math.cos(theta);
-        const sin = Math.sin(theta);
+        const cos = cosTable[k];
+        const sin = sinTable[k];
 
         const evenIdx = i + k;
         const oddIdx = i + k + halfLen;
