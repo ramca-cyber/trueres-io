@@ -3,6 +3,7 @@ import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX, Gauge } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { register, unregister } from '@/lib/playback-manager';
 
 interface VideoPlayerProps {
   src: File | Blob;
@@ -24,6 +25,12 @@ export const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
     const [showSpeed, setShowSpeed] = useState(false);
 
     useImperativeHandle(ref, () => innerRef.current!, []);
+
+    useEffect(() => {
+      const el = innerRef.current;
+      if (el) register(el);
+      return () => { if (el) unregister(el); };
+    }, []);
 
     useEffect(() => {
       const objectUrl = URL.createObjectURL(src);
