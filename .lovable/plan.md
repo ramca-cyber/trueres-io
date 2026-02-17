@@ -1,121 +1,74 @@
 
 
-# Interactive Audio Preview and Waveform Controls
+# Refinements Across the Audio Toolkit
 
-## Overview
+## 1. Retry button on all FFmpeg tools (not just AudioConverter)
 
-Add live audio preview (play before processing) and interactive waveform visualization to the audio processing tools. This uses the **Web Audio API** for instant in-browser playback -- no FFmpeg needed for previewing.
+Currently, only `AudioConverter.tsx` has a Retry button when the FFmpeg engine fails to load. All other FFmpeg-based tools (Trimmer, Normalizer, SampleRateConverter, ChannelOps, MetadataStripper, VideoToMp3, VideoToAudio, VideoTrimmer, VideoCompressor, VideoConverter, VideoMute, VideoToGif) show a plain error message with no way to retry. Add the same retry pattern everywhere.
 
-## What's Possible
+## 2. Loading engine progress bar on all FFmpeg tools
 
-The browser's Web Audio API can decode audio and play it back with real-time modifications (gain, channel routing, region selection). This means users can **hear the result before committing to the full FFmpeg process**.
+`AudioConverter.tsx` shows an indeterminate progress bar with "Downloading ~30 MB (first time only)" while the engine loads. The other FFmpeg tools show nothing during loading -- the button just says "Loading engine..." with a spinner. Add the same `{loading && <ProgressBar value={-1} ... />}` pattern to all FFmpeg tools.
 
-## Tools That Benefit
+## 3. "Analyze another file" button consistency
 
-| Tool | What it gets | Why |
-|------|-------------|-----|
-| **Audio Trimmer** | Interactive waveform with draggable start/end handles + play selection | Most impactful -- users need to hear where to cut |
-| **Audio Normalizer** | Before/after preview toggle (applies gain in real-time) | Users want to hear loudness change before downloading |
-| **Channel Ops** | Preview mono/left/right/swap via Web Audio routing | Hear which channel you're extracting |
-| **Sample Rate Converter** | Waveform display of input (preview not useful -- browser resamples internally) | Visual only, no audible preview difference |
-| **Audio Converter** | No preview needed -- format change, not audible difference | Skip |
-| **Metadata Stripper** | No preview needed -- no audible change | Skip |
+Analysis tools like `HiResVerifier`, `WaveformViewer`, `SpectrogramViewer` use a plain unstyled `<button>` or `useAudioStore.getState().clear()` call. Processing tools use a styled `<Button variant="outline">Choose different file</Button>`. Standardize all analysis tools to use the same styled Button component for resetting.
 
-## New Components and Hooks
+## 4. File size display on AudioPlayer output
 
-### 1. `src/hooks/use-audio-preview.ts` -- Web Audio playback engine
+When a processing tool produces output, show the output file size next to the download button. Users want to know how big the converted/trimmed file is compared to the input. Add a small `formatFileSize(outputBlob.size)` label in the output card.
 
-A hook that decodes the input file once and provides:
-- `playRegion(startSec, endSec)` -- play a specific time range
-- `playWithGain(gainDb)` -- play with volume adjustment (normalizer preview)
-- `playChannel(mode: 'stereo' | 'left' | 'right' | 'mono' | 'swap')` -- route channels
-- `stop()` -- stop playback
-- `isPlaying` -- state
-- `currentTime` -- for playhead position on waveform
-- `duration` -- total decoded duration
-- `audioBuffer` -- the decoded AudioBuffer for waveform computation
+## 5. Keyboard shortcuts for the InteractiveWaveform
 
-Uses a single `AudioContext` with `AudioBufferSourceNode` + `GainNode` + `ChannelSplitterNode`/`ChannelMergerNode` as needed.
+The trimmer's waveform currently only supports mouse/touch. Add keyboard support:
+- **Space** to toggle play/stop preview
+- **Left/Right arrows** to nudge the selected handle by 0.1s
+- These are standard DAW-like shortcuts users expect
 
-### 2. `src/components/shared/InteractiveWaveform.tsx` -- Waveform with handles
+## 6. Cover art memory leak in TagEditor
 
-A canvas-based waveform display (reuses `computeWaveform` from existing code) with:
-- **Draggable start/end handles** -- vertical lines the user can drag to set trim region
-- **Highlighted selection region** -- shaded area between handles
-- **Playhead indicator** -- moving vertical line synced to `currentTime`
-- **Click-to-seek** -- click anywhere on waveform to set playhead position
-- **Time labels** -- show timestamps at handles and cursor position
+`TagEditor.tsx` line 53 calls `URL.createObjectURL(metadata.coverArt)` directly in the render without ever revoking it. Every re-render creates a new object URL that leaks. Wrap it in a `useMemo` or `useEffect` with cleanup.
 
-Props:
-- `audioBuffer: AudioBuffer`
-- `startTime / endTime` -- controlled values
-- `onStartChange / onEndChange` -- callbacks when handles are dragged
-- `currentTime` -- for playhead
-- `onSeek` -- click-to-seek callback
+## 7. AudioPlayer dark mode styling
 
-### 3. Tool-specific integration
+The native `<audio>` element renders with the browser's default theme, which can look jarring against the dark UI. Add `[color-scheme:dark]` CSS to the audio element so browsers render dark controls.
 
-#### Audio Trimmer (biggest upgrade)
-- Decode file with Web Audio API on drop
-- Show `InteractiveWaveform` with draggable start/end handles
-- "Preview Selection" button plays only the selected region
-- Remove manual number inputs (or keep as secondary/precise controls)
-- Auto-set end time to file duration on load
+## 8. Normalizer preview button UX fix
 
-#### Audio Normalizer
-- "Preview" button plays audio with gain adjustment applied via GainNode
-- Shows before/after loudness estimate
-- Toggle between original and normalized preview
+The normalizer's "Original" and "Preview -14 LUFS" buttons both call `stop()` when clicked while playing, regardless of which mode is playing. If you're playing "Original" and click "Preview -14 LUFS", it stops instead of switching. Fix to only stop when clicking the same mode that's currently playing, otherwise switch directly.
 
-#### Channel Ops
-- "Preview" button plays audio with selected channel routing
-- Uses ChannelSplitterNode + ChannelMergerNode for real-time channel manipulation
+## 9. Drag cursor feedback on InteractiveWaveform
+
+When dragging a handle, the cursor stays as `crosshair`. Change it to `ew-resize` (horizontal resize) when hovering over a handle or while dragging, giving clear visual feedback.
+
+## 10. Output file size comparison
+
+In the output result card, show a comparison like "Output: 2.3 MB (68% smaller)" to give users immediate feedback on compression/conversion effectiveness. Particularly useful for AudioConverter, VideoCompressor, and MetadataStripper.
+
+---
 
 ## Technical Details
 
-### Web Audio API playback (no FFmpeg needed for preview)
+### Files modified
 
-```text
-File -> ArrayBuffer -> AudioContext.decodeAudioData() -> AudioBuffer
-                                                            |
-                                              AudioBufferSourceNode
-                                                            |
-                                    [GainNode / ChannelSplitter+Merger]
-                                                            |
-                                                      destination
-```
+| File | Changes |
+|------|---------|
+| `AudioPlayer.tsx` | Add `[color-scheme:dark]` class to `<audio>` element |
+| `InteractiveWaveform.tsx` | Add keyboard event handlers, cursor state for drag feedback |
+| `AudioNormalizer.tsx` | Fix preview toggle logic to switch modes instead of stopping |
+| `TagEditor.tsx` | Fix cover art object URL memory leak |
+| `AudioTrimmer.tsx` | Add Space key for play/stop |
+| All FFmpeg tools (12 files) | Add loading progress bar + retry button pattern |
+| All analysis tools (7 files) | Standardize "analyze another" to styled Button |
+| All FFmpeg output cards (8 files) | Add output file size display with comparison |
 
-- `playRegion(start, end)`: Set `source.start(0, startSec, endSec - startSec)`
-- `playWithGain(db)`: Connect through GainNode with `gain.value = 10^(db/20)`
-- `playChannel('left')`: Use ChannelSplitterNode, route channel 0 to both outputs
+### Implementation order
 
-### Waveform interaction (canvas mouse/touch events)
-
-```text
-+--[========SELECTED REGION========]------------------+
-|  |                                |                  |
-|  START handle                   END handle           |
-|  (draggable)                    (draggable)          |
-|                    ^ playhead                        |
-+-----------------------------------------------------+
-   0:00          0:15            0:45              1:30
-```
-
-- Mouse/touch events on canvas calculate time position from x coordinate
-- Hit detection on handles (within ~8px tolerance)
-- Drag updates `startTime`/`endTime` via callbacks
-- `requestAnimationFrame` loop updates playhead position during playback
-
-### Memory management
-- AudioBuffer is decoded once per file and held in the hook
-- AudioContext is created once, source nodes are created per-play and auto-disposed
-- Cleanup on unmount closes the AudioContext
-
-## Implementation Order
-
-1. `use-audio-preview.ts` hook (core playback engine)
-2. `InteractiveWaveform.tsx` component (visual + interaction)
-3. Upgrade `AudioTrimmer.tsx` (waveform + region select + preview)
-4. Upgrade `AudioNormalizer.tsx` (gain preview toggle)
-5. Upgrade `ChannelOps.tsx` (channel routing preview)
+1. `AudioPlayer.tsx` -- dark mode fix (quick, affects all tools)
+2. `InteractiveWaveform.tsx` -- keyboard shortcuts + cursor feedback
+3. `AudioNormalizer.tsx` -- preview toggle fix
+4. `TagEditor.tsx` -- memory leak fix
+5. FFmpeg loading/retry pattern across all tools
+6. Analysis tool button consistency
+7. Output file size comparison across processing tools
 
