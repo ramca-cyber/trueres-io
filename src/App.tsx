@@ -64,6 +64,12 @@ const ClippingDetector = lazy(() => import("./pages/tools/ClippingDetector"));
 const RoomAnalyzer = lazy(() => import("./pages/tools/RoomAnalyzer"));
 const IRViewer = lazy(() => import("./pages/tools/IRViewer"));
 const BitPerfectTest = lazy(() => import("./pages/tools/BitPerfectTest"));
+const CrossfeedSimulator = lazy(() => import("./pages/tools/CrossfeedSimulator"));
+const BinauralBeats = lazy(() => import("./pages/tools/BinauralBeats"));
+const SoundstageTest = lazy(() => import("./pages/tools/SoundstageTest"));
+const ChannelBalance = lazy(() => import("./pages/tools/ChannelBalance"));
+const EarTraining = lazy(() => import("./pages/tools/EarTraining"));
+const HeadphoneGuide = lazy(() => import("./pages/tools/HeadphoneGuide"));
 
 const queryClient = new QueryClient();
 
@@ -152,6 +158,14 @@ const App = () => (
                 <Route path="/room-analyzer" element={<RoomAnalyzer />} />
                 <Route path="/ir-viewer" element={<IRViewer />} />
                 <Route path="/bit-perfect-test" element={<BitPerfectTest />} />
+
+                {/* Headphone Tools */}
+                <Route path="/crossfeed" element={<CrossfeedSimulator />} />
+                <Route path="/binaural-beats" element={<BinauralBeats />} />
+                <Route path="/soundstage-test" element={<SoundstageTest />} />
+                <Route path="/channel-balance" element={<ChannelBalance />} />
+                <Route path="/ear-training" element={<EarTraining />} />
+                <Route path="/headphone-guide" element={<HeadphoneGuide />} />
 
                 <Route path="*" element={<NotFound />} />
               </Routes>

@@ -104,6 +104,30 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
     { q: 'What is bit-perfect playback?', a: 'Bit-perfect playback means the digital audio signal reaches your DAC without any modification — no volume adjustment, sample rate conversion, or DSP processing by the OS or driver.' },
     { q: 'How do I achieve bit-perfect output?', a: 'On Windows, use WASAPI Exclusive mode. On macOS, set Audio MIDI Setup to match the file\'s sample rate. On Linux, use ALSA direct output. Disable all system sound effects.' },
   ],
+  'crossfeed': [
+    { q: 'What is crossfeed?', a: 'Crossfeed blends a filtered, delayed portion of each stereo channel into the opposite ear, simulating the natural acoustic crosstalk that occurs with speakers. This reduces the "inside your head" effect of headphone listening.' },
+    { q: 'Will crossfeed work with any audio file?', a: 'Yes, any stereo audio file will work. Mono files won\'t benefit since there\'s no stereo separation to blend. The effect is most noticeable on hard-panned recordings.' },
+  ],
+  'binaural-beats': [
+    { q: 'How do binaural beats work?', a: 'Two slightly different frequencies are played in each ear. Your brain perceives the difference as a rhythmic "beat." For example, 200 Hz in the left ear and 210 Hz in the right creates a perceived 10 Hz alpha-wave beat.' },
+    { q: 'Do binaural beats require headphones?', a: 'Yes, stereo headphones are required. Speakers will mix the two tones in the air, eliminating the binaural effect. Use any comfortable headphones or earbuds.' },
+  ],
+  'soundstage-test': [
+    { q: 'What is soundstage?', a: 'Soundstage is the perceived spatial presentation of audio — how wide, deep, and three-dimensional the sound field appears. Open-back headphones typically have wider soundstage than closed-back.' },
+    { q: 'What is HRTF?', a: 'Head-Related Transfer Function models how your ears and head shape modify sound from different directions. Web Audio\'s HRTF panning model uses this to create a 3D spatial effect over headphones.' },
+  ],
+  'channel-balance': [
+    { q: 'Why would headphone drivers be imbalanced?', a: 'Manufacturing tolerances, aging, and driver wear can cause volume or frequency response differences between left and right drivers. Even new headphones can have slight imbalances.' },
+    { q: 'How much imbalance is acceptable?', a: 'Less than 1 dB difference is generally imperceptible. 1-3 dB is noticeable to trained ears. More than 3 dB indicates a potential defect or significant driver mismatch.' },
+  ],
+  'ear-training': [
+    { q: 'How long does ear training take?', a: 'Most people see noticeable improvement within 2-4 weeks of daily 10-15 minute sessions. Professional engineers train for months to reliably identify narrow frequency bands.' },
+    { q: 'Which difficulty should I start with?', a: 'Start with Easy (3 bands, +12 dB boost). Once you consistently score above 80%, move to Medium, then Hard. The narrower Q and lower boost in Hard mode simulate real-world mixing scenarios.' },
+  ],
+  'headphone-guide': [
+    { q: 'Do I need a headphone amplifier?', a: 'It depends on impedance and sensitivity. Most IEMs and low-impedance headphones (16-32Ω) work fine from a phone. High-impedance models (250Ω+) or low-sensitivity planars typically need a dedicated amp.' },
+    { q: 'What is the Harman target curve?', a: 'The Harman target is a frequency response curve developed through listener preference research. It features a slight bass boost and gentle treble rolloff, representing what most listeners find pleasing.' },
+  ],
 };
 
 /**
