@@ -1,18 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMiniPlayerStore } from '@/stores/mini-player-store';
-import { formatFileSize } from '@/config/constants';
+import { formatTime } from '@/lib/utils';
 import { Play, Pause, X, SkipForward, SkipBack, Maximize2, Music, Film, Volume2, VolumeX, Shuffle, Repeat } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { cn } from '@/lib/utils';
-
-function formatTime(s: number): string {
-  if (!isFinite(s) || s < 0) return '0:00';
-  const mins = Math.floor(s / 60);
-  const secs = Math.floor(s % 60);
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
-}
 
 export function MiniPlayer() {
   const { active, queue, currentIndex, isPlaying, currentTime, duration, deactivate, setPlaying, setCurrentIndex, setTime } = useMiniPlayerStore();
@@ -28,7 +21,6 @@ export function MiniPlayer() {
 
   const current = queue[currentIndex];
 
-  // Create object URL for current track
   useEffect(() => {
     if (!current?.playbackSrc) { setUrl(''); return; }
     const u = URL.createObjectURL(current.playbackSrc);
@@ -36,7 +28,6 @@ export function MiniPlayer() {
     return () => URL.revokeObjectURL(u);
   }, [current?.playbackSrc, current?.id]);
 
-  // Sync play state
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !url) return;
@@ -44,12 +35,10 @@ export function MiniPlayer() {
     else el.pause();
   }, [isPlaying, url]);
 
-  // Volume
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
   }, [volume, muted]);
 
-  // Time update
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -57,11 +46,7 @@ export function MiniPlayer() {
       if (!seeking) setTime(el.currentTime, el.duration || 0);
     };
     const onEnded = () => {
-      if (loop) {
-        el.currentTime = 0;
-        el.play();
-        return;
-      }
+      if (loop) { el.currentTime = 0; el.play(); return; }
       let next: number;
       if (shuffle) {
         const remaining = Array.from({ length: queue.length }, (_, i) => i).filter(i => i !== currentIndex);
@@ -69,12 +54,8 @@ export function MiniPlayer() {
       } else {
         next = currentIndex + 1;
       }
-      if (next < queue.length) {
-        setCurrentIndex(next);
-        setPlaying(true);
-      } else {
-        setPlaying(false);
-      }
+      if (next < queue.length) { setCurrentIndex(next); setPlaying(true); }
+      else setPlaying(false);
     };
     const onPlay = () => setPlaying(true);
     const onPause = () => setPlaying(false);
@@ -109,19 +90,12 @@ export function MiniPlayer() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card/95 backdrop-blur-md shadow-lg">
-      {/* Seek bar */}
       <div className="px-4 pt-1.5 max-w-screen-xl mx-auto">
-        <Slider
-          min={0} max={100} step={0.1}
-          value={[displayProgress]}
-          onValueChange={handleSeekChange}
-          onValueCommit={handleSeekCommit}
-          className="h-1"
-        />
+        <Slider min={0} max={100} step={0.1} value={[displayProgress]}
+          onValueChange={handleSeekChange} onValueCommit={handleSeekCommit} className="h-1" />
       </div>
 
       <div className="flex items-center gap-3 px-4 py-2 max-w-screen-xl mx-auto">
-        {/* Track info */}
         <div className={cn(
           'flex items-center justify-center h-8 w-8 rounded-md shrink-0',
           current.isVideo ? 'bg-accent/10 text-accent' : 'bg-primary/10 text-primary',
@@ -137,9 +111,9 @@ export function MiniPlayer() {
           </p>
         </div>
 
-        {/* Volume */}
         <div className="hidden sm:flex items-center gap-1.5 min-w-[100px]">
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setMuted(m => !m)}>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setMuted(m => !m)}
+            aria-label={muted ? 'Unmute' : 'Mute'}>
             {muted || volume === 0 ? <VolumeX className="h-3 w-3" /> : <Volume2 className="h-3 w-3" />}
           </Button>
           <Slider min={0} max={1} step={0.01} value={[muted ? 0 : volume]}
@@ -147,51 +121,45 @@ export function MiniPlayer() {
             className="flex-1" />
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-0.5">
           {queue.length > 1 && (
             <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', shuffle && 'text-primary')}
-              onClick={() => setShuffle(s => !s)} title="Shuffle">
+              onClick={() => setShuffle(s => !s)} aria-label="Shuffle">
               <Shuffle className="h-3 w-3" />
             </Button>
           )}
-
           {queue.length > 1 && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-              onClick={() => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); }}>
+              onClick={() => { if (currentIndex > 0) setCurrentIndex(currentIndex - 1); }}
+              aria-label="Previous track">
               <SkipBack className="h-3.5 w-3.5" />
             </Button>
           )}
-
           <Button variant="ghost" size="sm" className="h-8 w-8 p-0"
-            onClick={() => setPlaying(!isPlaying)}>
+            onClick={() => setPlaying(!isPlaying)} aria-label={isPlaying ? 'Pause' : 'Play'}>
             {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
-
           {queue.length > 1 && (
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-              onClick={() => { if (currentIndex < queue.length - 1) setCurrentIndex(currentIndex + 1); }}>
+              onClick={() => { if (currentIndex < queue.length - 1) setCurrentIndex(currentIndex + 1); }}
+              aria-label="Next track">
               <SkipForward className="h-3.5 w-3.5" />
             </Button>
           )}
-
           <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', loop && 'text-primary')}
-            onClick={() => setLoop(l => !l)} title="Loop">
+            onClick={() => setLoop(l => !l)} aria-label="Loop">
             <Repeat className="h-3 w-3" />
           </Button>
-
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-            onClick={() => navigate('/media-player')} title="Open full player">
+            onClick={() => navigate('/media-player')} aria-label="Open full player">
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
-
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-            onClick={deactivate} title="Close">
+            onClick={deactivate} aria-label="Close mini player">
             <X className="h-3.5 w-3.5" />
           </Button>
         </div>
 
-        {/* Hidden audio element */}
         {url && !current.isVideo && (
           <audio ref={audioRef} src={url} preload="auto" className="hidden" />
         )}

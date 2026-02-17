@@ -43,4 +43,6 @@
   <url><loc>https://trueres.io/bitrate-calculator</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://trueres.io/format-reference</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://trueres.io/bluetooth-codecs</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <!-- Media Player -->
+  <url><loc>https://trueres.io/media-player</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 </urlset>

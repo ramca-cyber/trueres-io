@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getToolById } from '@/config/tool-registry';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -14,7 +14,9 @@ import { ToolActionGrid } from '@/components/shared/ToolActionGrid';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ALL_MEDIA_ACCEPT, formatFileSize } from '@/config/constants';
+import { formatTime } from '@/lib/utils';
 import {
   RotateCcw, AlertTriangle, RefreshCw,
   SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
@@ -108,9 +110,7 @@ const SLEEP_OPTIONS = [
 ];
 
 function formatCountdown(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+  return formatTime(seconds);
 }
 
 /** Generate .m3u playlist content from queue */
@@ -135,11 +135,9 @@ export default function MediaPlayer() {
   const [showSpectrogram, setShowSpectrogram] = useState(false);
 
   // Phase 3 state
-  const [crossfadeSec, setCrossfadeSec] = useState(0); // 0 = off, 1-5
-  const [showCrossfade, setShowCrossfade] = useState(false);
-  const [sleepMode, setSleepMode] = useState(0); // 0=off, >0=minutes, -1=end of track
+  const [crossfadeSec, setCrossfadeSec] = useState(0);
+  const [sleepMode, setSleepMode] = useState(0);
   const [sleepRemaining, setSleepRemaining] = useState(0);
-  const [showSleep, setShowSleep] = useState(false);
   const [audioOnlyMode, setAudioOnlyMode] = useState(false);
   const [extractingAudio, setExtractingAudio] = useState(false);
   const [extractProgress, setExtractProgress] = useState(-1);
@@ -244,6 +242,10 @@ export default function MediaPlayer() {
     return next >= queue.length ? (loopMode === 'all' ? 0 : null) : next;
   }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
 
+  // Stable reference for pre-buffer deps
+  const queueIdsRef = useRef('');
+  const queueIds = useMemo(() => queue.map(q => q.id).join(','), [queue]);
+
   // ── Pre-buffer next track for gapless ──
   useEffect(() => {
     const nextIdx = getNextIndex(currentIndex);
@@ -263,7 +265,7 @@ export default function MediaPlayer() {
     return () => {
       if (nextUrlRef.current) { URL.revokeObjectURL(nextUrlRef.current); nextUrlRef.current = ''; }
     };
-  }, [currentIndex, queue, getNextIndex]);
+  }, [currentIndex, queueIds, getNextIndex]);
 
   // ── Crossfade logic ──
   useEffect(() => {
@@ -304,7 +306,7 @@ export default function MediaPlayer() {
       el.removeEventListener('timeupdate', checkCrossfade);
       if (crossfadeTimerRef.current) clearInterval(crossfadeTimerRef.current);
     };
-  }, [crossfadeSec]);
+  }, [crossfadeSec, currentIndex]);
 
   const getPrevIndex = useCallback((fromIndex: number): number | null => {
     if (shuffleOn && shuffleOrder.length === queue.length) {
@@ -543,19 +545,19 @@ export default function MediaPlayer() {
             {queue.length > 1 && (
               <Button variant="ghost" size="sm" onClick={() => setShuffleOn(s => !s)}
                 className={cn('h-8 w-8 p-0', shuffleOn && 'text-primary bg-primary/10')}
-                title={shuffleOn ? 'Shuffle on' : 'Shuffle off'}>
+                aria-label={shuffleOn ? 'Shuffle on' : 'Shuffle off'}>
                 <Shuffle className="h-4 w-4" />
               </Button>
             )}
 
             {queue.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={handlePrev} className="h-8 w-8 p-0" title="Previous (P)">
+              <Button variant="ghost" size="sm" onClick={handlePrev} className="h-8 w-8 p-0" aria-label="Previous track">
                 <SkipBack className="h-4 w-4" />
               </Button>
             )}
 
             {queue.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={handleNext} className="h-8 w-8 p-0" title="Next (N)">
+              <Button variant="ghost" size="sm" onClick={handleNext} className="h-8 w-8 p-0" aria-label="Next track">
                 <SkipForward className="h-4 w-4" />
               </Button>
             )}
@@ -563,7 +565,7 @@ export default function MediaPlayer() {
             {queue.length > 1 && (
               <Button variant="ghost" size="sm" onClick={cycleLoop}
                 className={cn('h-8 px-2 gap-1.5 text-xs', loopMode !== 'off' && 'text-primary bg-primary/10')}
-                title={LOOP_LABELS[loopMode]}>
+                aria-label={LOOP_LABELS[loopMode]}>
                 {loopMode === 'one' ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
                 <span className="font-mono text-[10px]">{loopMode === 'off' ? 'Off' : loopMode === 'one' ? '1' : 'All'}</span>
               </Button>
@@ -573,7 +575,7 @@ export default function MediaPlayer() {
             {isAudioTrack && current?.status === 'ready' && (
               <Button variant="ghost" size="sm" onClick={() => setShowSpectrum(s => !s)}
                 className={cn('h-8 w-8 p-0', showSpectrum && 'text-primary bg-primary/10')}
-                title="Toggle spectrum">
+                aria-label="Toggle spectrum">
                 <BarChart3 className="h-4 w-4" />
               </Button>
             )}
@@ -582,60 +584,60 @@ export default function MediaPlayer() {
             {isAudioTrack && current?.status === 'ready' && (
               <Button variant="ghost" size="sm" onClick={() => setShowSpectrogram(s => !s)}
                 className={cn('h-8 w-8 p-0', showSpectrogram && 'text-primary bg-primary/10')}
-                title="Toggle spectrogram">
+                aria-label="Toggle spectrogram">
                 <Waves className="h-4 w-4" />
               </Button>
             )}
 
-            {/* Crossfade */}
+            {/* Crossfade — Radix Popover */}
             {queue.length > 1 && (
-              <div className="relative">
-                <Button variant="ghost" size="sm" onClick={() => setShowCrossfade(s => !s)}
-                  className={cn('h-8 px-2 gap-1 text-xs', crossfadeSec > 0 && 'text-primary bg-primary/10')}
-                  title={crossfadeSec > 0 ? `Crossfade: ${crossfadeSec}s` : 'Crossfade off'}>
-                  <AudioLines className="h-3.5 w-3.5" />
-                  <span className="font-mono text-[10px]">{crossfadeSec > 0 ? `${crossfadeSec}s` : 'X'}</span>
-                </Button>
-                {showCrossfade && (
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded-lg border border-border bg-card p-3 shadow-lg z-20 w-48">
-                    <p className="text-xs text-muted-foreground mb-2">Crossfade duration</p>
-                    <Slider min={0} max={5} step={1} value={[crossfadeSec]}
-                      onValueChange={([v]) => setCrossfadeSec(v)} />
-                    <div className="flex justify-between mt-1">
-                      <span className="text-[10px] text-muted-foreground">Off</span>
-                      <span className="text-[10px] text-muted-foreground">5s</span>
-                    </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm"
+                    className={cn('h-8 px-2 gap-1 text-xs', crossfadeSec > 0 && 'text-primary bg-primary/10')}
+                    aria-label={crossfadeSec > 0 ? `Crossfade: ${crossfadeSec}s` : 'Crossfade off'}>
+                    <AudioLines className="h-3.5 w-3.5" />
+                    <span className="font-mono text-[10px]">{crossfadeSec > 0 ? `${crossfadeSec}s` : 'X'}</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-3" side="top">
+                  <p className="text-xs text-muted-foreground mb-2">Crossfade duration</p>
+                  <Slider min={0} max={5} step={1} value={[crossfadeSec]}
+                    onValueChange={([v]) => setCrossfadeSec(v)} />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">Off</span>
+                    <span className="text-[10px] text-muted-foreground">5s</span>
                   </div>
-                )}
-              </div>
+                </PopoverContent>
+              </Popover>
             )}
 
-            {/* Sleep timer */}
-            <div className="relative">
-              <Button variant="ghost" size="sm" onClick={() => setShowSleep(s => !s)}
-                className={cn('h-8 px-2 gap-1 text-xs', sleepMode !== 0 && 'text-primary bg-primary/10')}
-                title={sleepMode === 0 ? 'Sleep timer' : sleepMode === -1 ? 'Stop after track' : `Sleep: ${formatCountdown(sleepRemaining)}`}>
-                {sleepMode !== 0 ? <TimerOff className="h-3.5 w-3.5" /> : <Timer className="h-3.5 w-3.5" />}
-                {sleepMode > 0 && <span className="font-mono text-[10px]">{formatCountdown(sleepRemaining)}</span>}
-                {sleepMode === -1 && <span className="font-mono text-[10px]">EoT</span>}
-              </Button>
-              {showSleep && (
-                <div className="absolute bottom-full right-0 mb-2 rounded-lg border border-border bg-card p-2 shadow-lg z-20 min-w-[140px]">
-                  {SLEEP_OPTIONS.map(opt => (
-                    <button key={opt.value} onClick={() => { setSleepMode(opt.value); setShowSleep(false); }}
-                      className={cn('w-full text-left px-3 py-1.5 rounded text-xs transition-colors',
-                        sleepMode === opt.value ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-muted-foreground')}>
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Sleep timer — Radix Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm"
+                  className={cn('h-8 px-2 gap-1 text-xs', sleepMode !== 0 && 'text-primary bg-primary/10')}
+                  aria-label={sleepMode === 0 ? 'Sleep timer' : sleepMode === -1 ? 'Stop after track' : `Sleep: ${formatCountdown(sleepRemaining)}`}>
+                  {sleepMode !== 0 ? <TimerOff className="h-3.5 w-3.5" /> : <Timer className="h-3.5 w-3.5" />}
+                  {sleepMode > 0 && <span className="font-mono text-[10px]">{formatCountdown(sleepRemaining)}</span>}
+                  {sleepMode === -1 && <span className="font-mono text-[10px]">EoT</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[140px] p-2" side="top">
+                {SLEEP_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => setSleepMode(opt.value)}
+                    className={cn('w-full text-left px-3 py-1.5 rounded text-xs transition-colors',
+                      sleepMode === opt.value ? 'bg-primary/10 text-primary' : 'hover:bg-secondary text-muted-foreground')}>
+                    {opt.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
 
             {/* Audio-only for video */}
             {isVideoTrack && current?.status === 'ready' && !extractingAudio && (
               <Button variant="ghost" size="sm" onClick={handleAudioOnly}
-                className="h-8 px-2 gap-1 text-xs" title="Audio-only mode">
+                className="h-8 px-2 gap-1 text-xs" aria-label="Audio-only mode">
                 <VideoOff className="h-3.5 w-3.5" />
                 <span className="text-[10px]">Audio only</span>
               </Button>
@@ -644,7 +646,7 @@ export default function MediaPlayer() {
             {/* Restore video if in audio-only */}
             {audioOnlyMode && (
               <Button variant="ghost" size="sm" onClick={handleRestoreVideo}
-                className="h-8 px-2 gap-1 text-xs text-primary" title="Restore video">
+                className="h-8 px-2 gap-1 text-xs text-primary" aria-label="Restore video">
                 <Film className="h-3.5 w-3.5" />
                 <span className="text-[10px]">Video</span>
               </Button>
@@ -653,7 +655,7 @@ export default function MediaPlayer() {
             {/* Mini-player */}
             {isAudioTrack && current?.status === 'ready' && (
               <Button variant="ghost" size="sm" onClick={handleMinimize}
-                className="h-8 w-8 p-0" title="Minimize to mini-player">
+                className="h-8 w-8 p-0" aria-label="Minimize to mini-player">
                 <Minimize2 className="h-4 w-4" />
               </Button>
             )}

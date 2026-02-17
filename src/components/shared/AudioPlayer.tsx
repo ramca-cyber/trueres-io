@@ -91,6 +91,17 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       analyserRef.current = analyser;
 
       onAnalyserReady?.(analyser);
+
+      return () => {
+        ctx.close().catch(() => {});
+        ctxRef.current = null;
+        sourceRef.current = null;
+        gainRef.current = null;
+        bassRef.current = null;
+        midRef.current = null;
+        trebleRef.current = null;
+        analyserRef.current = null;
+      };
     }, [url]);
 
     useEffect(() => {

@@ -7,10 +7,6 @@ interface LiveSpectrogramProps {
   className?: string;
 }
 
-/**
- * Scrolling real-time spectrogram visualization from an AnalyserNode.
- * Each animation frame draws a 1px column representing frequency magnitudes.
- */
 export function LiveSpectrogram({
   analyserNode,
   width = 600,
@@ -22,7 +18,6 @@ export function LiveSpectrogram({
   const rafRef = useRef<number>(0);
   const actualWidthRef = useRef(width);
 
-  // Track container width
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -41,11 +36,9 @@ export function LiveSpectrogram({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const fftSize = analyserNode.fftSize;
     const bufferLength = analyserNode.frequencyBinCount;
     const dataArray = new Uint8Array(bufferLength);
 
-    // Color map: dark blue → cyan → yellow → red → white
     function valueToColor(v: number): string {
       const t = v / 255;
       if (t < 0.2) {
@@ -80,14 +73,11 @@ export function LiveSpectrogram({
 
       analyserNode.getByteFrequencyData(dataArray);
 
-      // Shift canvas left by 1px
       const imageData = ctx.getImageData(dpr, 0, (w - 1) * dpr, h * dpr);
       ctx.putImageData(imageData, 0, 0);
 
-      // Draw new column at right edge
       const binHeight = h / bufferLength;
       for (let i = 0; i < bufferLength; i++) {
-        // Map low frequencies to bottom
         const y = h - (i + 1) * binHeight;
         ctx.fillStyle = valueToColor(dataArray[i]);
         ctx.fillRect(w - 1, y, 1, Math.max(1, binHeight));
@@ -106,6 +96,8 @@ export function LiveSpectrogram({
         ref={canvasRef}
         className="w-full rounded-md border border-border"
         style={{ height }}
+        role="img"
+        aria-label="Live scrolling spectrogram visualization"
       />
     </div>
   );
