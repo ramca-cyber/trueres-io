@@ -61,7 +61,7 @@ const FreqResponse = () => {
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!spectrumData && pcm && <ProgressBar value={50} label="Computing frequency response..." />}
         {spectrumData && (
-          <div ref={containerRef} className="space-y-2">
+          <div ref={containerRef} className="space-y-2 viz-fullscreen-container">
             <h3 className="text-sm font-medium">Frequency Response Curve</h3>
             <p className="text-xs text-muted-foreground">
               For best results, use a logarithmic sweep recording captured through your audio chain.

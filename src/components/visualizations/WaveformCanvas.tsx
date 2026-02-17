@@ -181,11 +181,11 @@ export function WaveformCanvas({
   }, [ref, cursorRef, cursorLabel]);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="viz-canvas-wrap" style={{ minHeight: '200px' }}>
       <canvas
         ref={ref as React.RefObject<HTMLCanvasElement>}
-        className="w-full rounded-md border border-border"
-        style={{ cursor: 'crosshair', height: '200px' }}
+        className="viz-canvas rounded-md border border-border"
+        style={{ cursor: 'crosshair' }}
         {...canvasHandlers}
       />
     </div>
