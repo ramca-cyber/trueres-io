@@ -8,6 +8,10 @@ interface SpectrogramCanvasProps {
   colormap?: 'magma' | 'inferno' | 'viridis' | 'plasma' | 'grayscale';
   minDb?: number;
   maxDb?: number;
+  /** Optional frequency ceiling line to draw (Hz) */
+  ceilingHz?: number;
+  /** Whether to show a CD Nyquist reference line at 22.05 kHz */
+  showCdNyquist?: boolean;
 }
 
 /**
@@ -25,15 +29,11 @@ function buildLUT(fn: (t: number) => [number, number, number]): Uint8Array {
   return lut;
 }
 
-// Attempt to approximate the matplotlib colormaps more faithfully
-// using piecewise-linear interpolation on key control points.
-
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
 function piecewise(t: number, stops: [number, number, number, number][]): [number, number, number] {
-  // stops: [position, r, g, b] in 0-1 range
   if (t <= stops[0][0]) return [Math.round(stops[0][1] * 255), Math.round(stops[0][2] * 255), Math.round(stops[0][3] * 255)];
   for (let i = 1; i < stops.length; i++) {
     if (t <= stops[i][0]) {
@@ -49,7 +49,6 @@ function piecewise(t: number, stops: [number, number, number, number][]): [numbe
   return [Math.round(last[1] * 255), Math.round(last[2] * 255), Math.round(last[3] * 255)];
 }
 
-// Magma: black → deep purple → hot pink → yellow-white
 const magmaStops: [number, number, number, number][] = [
   [0.0,  0.001, 0.000, 0.014],
   [0.13, 0.108, 0.047, 0.262],
@@ -62,7 +61,6 @@ const magmaStops: [number, number, number, number][] = [
   [1.0,  0.987, 0.991, 0.750],
 ];
 
-// Inferno: black → indigo → orange → yellow
 const infernoStops: [number, number, number, number][] = [
   [0.0,  0.001, 0.000, 0.014],
   [0.13, 0.120, 0.047, 0.282],
@@ -75,7 +73,6 @@ const infernoStops: [number, number, number, number][] = [
   [1.0,  0.988, 0.998, 0.645],
 ];
 
-// Viridis: dark purple → teal → green → yellow
 const viridisStops: [number, number, number, number][] = [
   [0.0,  0.267, 0.004, 0.329],
   [0.13, 0.283, 0.141, 0.458],
@@ -88,7 +85,6 @@ const viridisStops: [number, number, number, number][] = [
   [1.0,  0.993, 0.906, 0.144],
 ];
 
-// Plasma: deep blue-purple → magenta → orange → yellow
 const plasmaStops: [number, number, number, number][] = [
   [0.0,  0.050, 0.030, 0.528],
   [0.13, 0.229, 0.029, 0.586],
@@ -116,6 +112,8 @@ export function SpectrogramCanvas({
   colormap = 'magma',
   minDb = -120,
   maxDb = 0,
+  ceilingHz,
+  showCdNyquist = false,
 }: SpectrogramCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const lut = useMemo(() => LUTS[colormap] || LUTS.magma, [colormap]);
@@ -127,24 +125,29 @@ export function SpectrogramCanvas({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    canvas.width = width;
+    canvas.height = height;
+
     const numFrames = data.magnitudes.length;
     const numBins = data.magnitudes[0].length;
     const dbRange = maxDb - minDb;
+    const nyquist = data.sampleRate / 2;
 
-    // Create offscreen image
-    const imgData = ctx.createImageData(numFrames, numBins);
+    // Render at display resolution: map each display pixel to the nearest data point
+    const imgData = ctx.createImageData(width, height);
     const pixels = imgData.data;
 
-    for (let x = 0; x < numFrames; x++) {
-      const frame = data.magnitudes[x];
-      for (let y = 0; y < numBins; y++) {
-        const db = frame[y];
+    for (let dx = 0; dx < width; dx++) {
+      const frameIdx = Math.min(numFrames - 1, (dx / width * numFrames) | 0);
+      const frame = data.magnitudes[frameIdx];
+      for (let dy = 0; dy < height; dy++) {
+        // dy=0 is top (high freq), dy=height-1 is bottom (low freq)
+        const binIdx = Math.min(numBins - 1, ((1 - dy / height) * numBins) | 0);
+        const db = frame[binIdx];
         const t = Math.max(0, Math.min(1, (db - minDb) / dbRange));
-        const lutIdx = (t * 255) | 0; // fast floor
+        const lutIdx = (t * 255) | 0;
         const li = lutIdx * 3;
-        // Flip Y so low frequencies are at bottom
-        const destY = numBins - 1 - y;
-        const idx = (destY * numFrames + x) * 4;
+        const idx = (dy * width + dx) * 4;
         pixels[idx] = lut[li];
         pixels[idx + 1] = lut[li + 1];
         pixels[idx + 2] = lut[li + 2];
@@ -152,29 +155,54 @@ export function SpectrogramCanvas({
       }
     }
 
-    // Draw to offscreen canvas then scale
-    const offscreen = document.createElement('canvas');
-    offscreen.width = numFrames;
-    offscreen.height = numBins;
-    offscreen.getContext('2d')!.putImageData(imgData, 0, 0);
+    ctx.putImageData(imgData, 0, 0);
 
-    canvas.width = width;
-    canvas.height = height;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(offscreen, 0, 0, width, height);
-
-    // Draw frequency axis labels
-    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    // Draw overlay lines
     ctx.font = '10px monospace';
+
+    // Bandwidth ceiling line
+    if (ceilingHz && ceilingHz < nyquist) {
+      const yPos = (1 - ceilingHz / nyquist) * height;
+      ctx.strokeStyle = 'rgba(255, 80, 80, 0.8)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 3]);
+      ctx.beginPath();
+      ctx.moveTo(0, yPos);
+      ctx.lineTo(width, yPos);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(255, 80, 80, 0.9)';
+      ctx.textAlign = 'left';
+      ctx.fillText(`Ceiling: ${ceilingHz >= 1000 ? `${(ceilingHz / 1000).toFixed(1)}k` : Math.round(ceilingHz)} Hz`, 4, yPos - 4);
+    }
+
+    // CD Nyquist reference line (22.05 kHz)
+    if (showCdNyquist && nyquist > 22050) {
+      const cdY = (1 - 22050 / nyquist) * height;
+      ctx.strokeStyle = 'rgba(100, 200, 255, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, cdY);
+      ctx.lineTo(width, cdY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = 'rgba(100, 200, 255, 0.9)';
+      ctx.textAlign = 'left';
+      ctx.fillText('CD Nyquist (22.05k)', 4, cdY - 4);
+    }
+
+    // Frequency axis labels
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     ctx.textAlign = 'right';
     const freqLabels = [100, 500, 1000, 2000, 5000, 10000, 20000];
-    const nyquist = data.sampleRate / 2;
     for (const freq of freqLabels) {
       if (freq > nyquist) continue;
       const yRatio = 1 - freq / nyquist;
       const yPos = yRatio * height;
       ctx.fillText(`${freq >= 1000 ? `${freq / 1000}k` : freq}`, width - 4, yPos + 3);
       ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(0, yPos);
       ctx.lineTo(width - 30, yPos);
@@ -183,6 +211,7 @@ export function SpectrogramCanvas({
 
     // Time axis labels
     ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
     const totalDuration = data.times[data.times.length - 1] || 0;
     const timeLabels = 5;
     for (let i = 0; i <= timeLabels; i++) {
@@ -190,7 +219,7 @@ export function SpectrogramCanvas({
       const x = (i / timeLabels) * width;
       ctx.fillText(`${t.toFixed(1)}s`, x, height - 4);
     }
-  }, [data, width, height, lut, minDb, maxDb]);
+  }, [data, width, height, lut, minDb, maxDb, ceilingHz, showCdNyquist]);
 
   return (
     <canvas
