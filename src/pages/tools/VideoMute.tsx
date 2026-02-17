@@ -1,12 +1,70 @@
+import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
+import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { ProgressBar } from '@/components/shared/ProgressBar';
+import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT } from '@/config/constants';
+import { useFFmpeg } from '@/hooks/use-ffmpeg';
+import { videoMuteArgs } from '@/engines/processing/presets';
+import { Button } from '@/components/ui/button';
+import { Loader2, VolumeX } from 'lucide-react';
+
 const tool = getToolById('video-mute')!;
-const VideoMute = () => (
-  <ToolPage tool={tool}>
-    <FileDropZone accept={VIDEO_ACCEPT} onFileSelect={(f) => console.log(f.name)} label="Drop your video file here" sublabel="MP4, WebM, AVI, MKV, MOV" />
-    <div className="rounded-lg border border-dashed border-border bg-card/50 p-8 text-center text-muted-foreground text-sm">Drop a video above to mute or replace audio.</div>
-  </ToolPage>
-);
+
+const VideoMute = () => {
+  const [file, setFile] = useState<File | null>(null);
+  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+
+  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+
+  const handleMute = async () => {
+    if (!file) return;
+    const ext = file.name.split('.').pop() || 'mp4';
+    const outName = `muted.${ext}`;
+    const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const args = videoMuteArgs(inputName, outName);
+    await process(file, outName, args);
+  };
+
+  const baseName = file?.name.replace(/\.[^.]+$/, '') || 'muted';
+  const ext = file?.name.split('.').pop() || 'mp4';
+
+  return (
+    <ToolPage tool={tool}>
+      {!file ? (
+        <FileDropZone accept={VIDEO_ACCEPT} onFileSelect={handleFileSelect} label="Drop your video file here" sublabel="MP4, WebM, AVI, MKV, MOV" />
+      ) : (
+        <div className="space-y-4">
+          <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <div className="rounded-lg border border-border bg-card/50 p-4 flex items-start gap-3">
+            <VolumeX className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium">Audio Removal</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The audio track will be completely removed. Video is copied without re-encoding (fast, no quality loss).
+              </p>
+            </div>
+          </div>
+          {processing && <ProgressBar value={progress} label="Removing audio..." sublabel={`${progress}%`} />}
+          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          <div className="flex gap-3">
+            <Button onClick={handleMute} disabled={processing || loading}>
+              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {loading ? 'Loading engine...' : processing ? 'Processing...' : 'Remove Audio'}
+            </Button>
+            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
+          </div>
+          {outputBlob && (
+            <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Audio removed! Silent video ready.</p>
+              <DownloadButton blob={outputBlob} filename={`${baseName}_muted.${ext}`} label="Download silent video" />
+            </div>
+          )}
+        </div>
+      )}
+    </ToolPage>
+  );
+};
 export default VideoMute;
