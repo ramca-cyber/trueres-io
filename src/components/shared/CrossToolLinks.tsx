@@ -5,9 +5,10 @@ import { type ToolCategory } from '@/types/tools';
 interface CrossToolLinksProps {
   currentToolId: string;
   category: ToolCategory;
+  defaultOpen?: boolean;
 }
 
-export function CrossToolLinks({ currentToolId, category }: CrossToolLinksProps) {
+export function CrossToolLinks({ currentToolId, category, defaultOpen = true }: CrossToolLinksProps) {
   const related = TOOLS.filter((t) => t.category === category && t.id !== currentToolId).slice(0, 4);
 
   if (related.length === 0) return null;
