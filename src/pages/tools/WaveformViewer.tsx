@@ -7,6 +7,7 @@ import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
 import { WaveformCanvas } from '@/components/visualizations/WaveformCanvas';
 import { VizToolbar } from '@/components/shared/VizToolbar';
+import { Button } from '@/components/ui/button';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
@@ -86,7 +87,6 @@ const WaveformViewer = () => {
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
               fullscreen={{ containerRef }}
               download={{ canvasRef: viz.canvasRef, filename: `${fileName}-waveform.png` }}
-              onNewFile={() => useAudioStore.getState().clear()}
             />
             <WaveformCanvas
               data={waveformData as WaveformData}
@@ -99,6 +99,12 @@ const WaveformViewer = () => {
             <p className={`text-xs text-muted-foreground ${viz.isZoomed ? '' : 'invisible'}`}>Scroll to zoom · Drag to pan · Double-click to reset</p>
           </div>
         )}
+
+        <div className="flex justify-center">
+          <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 px-8" onClick={() => useAudioStore.getState().clear()}>
+            Analyze another file
+          </Button>
+        </div>
       </div>
     </ToolPage>
   );

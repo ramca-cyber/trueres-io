@@ -4,7 +4,7 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Download, FolderOpen } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Download } from 'lucide-react';
 
 export interface VizToggle {
   id: string;
@@ -47,7 +47,7 @@ export interface VizToolbarProps {
     filename?: string;
   };
 
-  onNewFile?: () => void;
+  
 }
 
 export function VizToolbar({
@@ -57,7 +57,6 @@ export function VizToolbar({
   toggles,
   fullscreen,
   download,
-  onNewFile,
 }: VizToolbarProps) {
   const handleFullscreen = () => {
     const el = fullscreen?.containerRef.current;
@@ -151,11 +150,6 @@ export function VizToolbar({
 
       <div className="flex-1" />
 
-      {onNewFile && (
-        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={onNewFile} title="Analyze another file">
-          <FolderOpen className="h-3 w-3 mr-1" /> New file
-        </Button>
-      )}
 
       {fullscreen && (
         <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleFullscreen} title="Fullscreen">

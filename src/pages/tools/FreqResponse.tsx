@@ -70,7 +70,6 @@ const FreqResponse = () => {
               zoom={{ onIn: viz.zoomIn, onOut: viz.zoomOut, onReset: viz.reset, isZoomed: viz.isZoomed }}
               fullscreen={{ containerRef }}
               download={{ canvasRef: viz.canvasRef, filename: `${fileName}-freq-response.png` }}
-              onNewFile={() => useAudioStore.getState().clear()}
             />
             <SpectrumCanvas
               data={spectrumData as unknown as SpectrumData}
@@ -84,6 +83,12 @@ const FreqResponse = () => {
             <p className={`text-xs text-muted-foreground ${viz.isZoomed ? '' : 'invisible'}`}>Scroll to zoom freq · Shift+scroll to zoom dB · Drag to pan · Double-click to reset</p>
           </div>
         )}
+
+        <div className="flex justify-center">
+          <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 px-8" onClick={() => useAudioStore.getState().clear()}>
+            Analyze another file
+          </Button>
+        </div>
       </div>
     </ToolPage>
   );
