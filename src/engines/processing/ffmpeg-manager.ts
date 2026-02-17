@@ -4,16 +4,20 @@ import { fetchFile, toBlobURL } from '@ffmpeg/util';
 let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;
 
-const CORE_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js';
-const WASM_URL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm';
+const CORE_VERSION = '0.12.6';
+const CDN_BASE = `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`;
+const CORE_URL = `${CDN_BASE}/ffmpeg-core.js`;
+const WASM_URL = `${CDN_BASE}/ffmpeg-core.wasm`;
 
 export type FFmpegProgressCallback = (progress: number) => void;
 
-const LOAD_TIMEOUT_MS = 30_000;
+const LOAD_TIMEOUT_MS = 60_000; // 60s — WASM file is ~30MB
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. This may be due to browser limitations (SharedArrayBuffer not available). Try using Chrome or Firefox with proper CORS headers.`)), ms);
+    const timer = setTimeout(() => reject(new Error(
+      `${label} timed out after ${ms / 1000}s. The ~30 MB engine may still be downloading. Please try again on a faster connection.`
+    )), ms);
     promise.then(
       (v) => { clearTimeout(timer); resolve(v); },
       (e) => { clearTimeout(timer); reject(e); },
@@ -32,15 +36,29 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   loadPromise = (async () => {
     const ffmpeg = new FFmpeg();
 
-    // Load with CDN-hosted core to avoid CORS/bundling issues
-    const coreURL = await toBlobURL(CORE_URL, 'text/javascript');
-    const wasmURL = await toBlobURL(WASM_URL, 'application/wasm');
+    // Fetch core files and convert to blob URLs to avoid CORS issues
+    let coreURL: string;
+    let wasmURL: string;
+    try {
+      [coreURL, wasmURL] = await Promise.all([
+        withTimeout(toBlobURL(CORE_URL, 'text/javascript'), LOAD_TIMEOUT_MS, 'Core JS download'),
+        withTimeout(toBlobURL(WASM_URL, 'application/wasm'), LOAD_TIMEOUT_MS, 'WASM download'),
+      ]);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Failed to download FFmpeg files from CDN: ${msg}`);
+    }
 
-    await withTimeout(
-      ffmpeg.load({ coreURL, wasmURL }),
-      LOAD_TIMEOUT_MS,
-      'FFmpeg engine load',
-    );
+    try {
+      await withTimeout(
+        ffmpeg.load({ coreURL, wasmURL }),
+        LOAD_TIMEOUT_MS,
+        'FFmpeg initialization',
+      );
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`FFmpeg failed to initialize: ${msg}`);
+    }
 
     ffmpegInstance = ffmpeg;
     return ffmpeg;
