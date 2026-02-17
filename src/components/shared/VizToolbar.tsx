@@ -82,85 +82,93 @@ export function VizToolbar({
     });
   };
 
+  const hasRow1 = dbRange || colormap || toggles?.length;
+  const hasRow2 = zoom || fullscreen || download;
+
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      {zoom && (
-        <div className="flex items-center gap-1">
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={zoom.onIn} title="Zoom in (scroll wheel)">
-            <ZoomIn className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={zoom.onOut} title="Zoom out">
-            <ZoomOut className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="sm" className={`h-7 px-2 text-xs ${zoom.isZoomed ? '' : 'invisible'}`} onClick={zoom.onReset} title="Reset view (double-click)">
-            <RotateCcw className="h-3 w-3 mr-1" /> Reset
-          </Button>
+    <div className="space-y-1.5 text-sm">
+      {hasRow1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {dbRange && (
+            <>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs font-medium whitespace-nowrap">Min dB</label>
+                <Slider
+                  value={[dbRange.min]}
+                  onValueChange={([v]) => dbRange.onMinChange(v)}
+                  min={dbRange.minBound ?? -160}
+                  max={dbRange.maxBound ?? -20}
+                  step={5}
+                  className="w-20"
+                />
+                <span className="text-xs font-mono text-muted-foreground w-8">{dbRange.min}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs font-medium whitespace-nowrap">Max dB</label>
+                <Slider
+                  value={[dbRange.max]}
+                  onValueChange={([v]) => dbRange.onMaxChange(v)}
+                  min={-40}
+                  max={0}
+                  step={5}
+                  className="w-20"
+                />
+                <span className="text-xs font-mono text-muted-foreground w-8">{dbRange.max}</span>
+              </div>
+            </>
+          )}
+
+          {colormap && (
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium">Colormap</label>
+              <Select value={colormap.value} onValueChange={colormap.onChange}>
+                <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {colormap.options.map((c) => (
+                    <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {toggles?.map((t) => (
+            <div key={t.id} className="flex items-center gap-1.5">
+              <Switch checked={t.checked} onCheckedChange={t.onChange} id={t.id} className="scale-75" />
+              <Label htmlFor={t.id} className="text-xs cursor-pointer">{t.label}</Label>
+            </div>
+          ))}
         </div>
       )}
 
-      {dbRange && (
-        <>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs font-medium whitespace-nowrap">Min dB</label>
-            <Slider
-              value={[dbRange.min]}
-              onValueChange={([v]) => dbRange.onMinChange(v)}
-              min={dbRange.minBound ?? -160}
-              max={dbRange.maxBound ?? -20}
-              step={5}
-              className="w-20"
-            />
-            <span className="text-xs font-mono text-muted-foreground w-8">{dbRange.min}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs font-medium whitespace-nowrap">Max dB</label>
-            <Slider
-              value={[dbRange.max]}
-              onValueChange={([v]) => dbRange.onMaxChange(v)}
-              min={-40}
-              max={0}
-              step={5}
-              className="w-20"
-            />
-            <span className="text-xs font-mono text-muted-foreground w-8">{dbRange.max}</span>
-          </div>
-        </>
-      )}
+      {hasRow2 && (
+        <div className="flex items-center justify-end gap-1">
+          {zoom && (
+            <div className="flex items-center gap-1">
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={zoom.onIn} title="Zoom in (scroll wheel)">
+                <ZoomIn className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" onClick={zoom.onOut} title="Zoom out">
+                <ZoomOut className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="sm" className={`h-7 px-2 text-xs ${zoom.isZoomed ? '' : 'invisible'}`} onClick={zoom.onReset} title="Reset view (double-click)">
+                <RotateCcw className="h-3 w-3 mr-1" /> Reset
+              </Button>
+            </div>
+          )}
 
-      {colormap && (
-        <div className="flex items-center gap-1.5">
-          <label className="text-xs font-medium">Colormap</label>
-          <Select value={colormap.value} onValueChange={colormap.onChange}>
-            <SelectTrigger className="h-7 w-24 text-xs"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {colormap.options.map((c) => (
-                <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {fullscreen && (
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleFullscreen} title="Fullscreen">
+              <Maximize2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+
+          {download && (
+            <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download PNG">
+              <Download className="h-3.5 w-3.5" />
+            </Button>
+          )}
         </div>
-      )}
-
-      {toggles?.map((t) => (
-        <div key={t.id} className="flex items-center gap-1.5">
-          <Switch checked={t.checked} onCheckedChange={t.onChange} id={t.id} className="scale-75" />
-          <Label htmlFor={t.id} className="text-xs cursor-pointer">{t.label}</Label>
-        </div>
-      ))}
-
-      <div className="flex-1" />
-
-
-      {fullscreen && (
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleFullscreen} title="Fullscreen">
-          <Maximize2 className="h-3.5 w-3.5" />
-        </Button>
-      )}
-
-      {download && (
-        <Button variant="outline" size="icon" className="h-7 w-7" onClick={handleDownload} title="Download PNG">
-          <Download className="h-3.5 w-3.5" />
-        </Button>
       )}
     </div>
   );
