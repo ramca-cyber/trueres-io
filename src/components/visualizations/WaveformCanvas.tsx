@@ -1,4 +1,4 @@
-import { useRef, useEffect, type RefObject } from 'react';
+import { useRef, useEffect, useState, type RefObject } from 'react';
 import { type WaveformData } from '@/types/analysis';
 import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
@@ -27,7 +27,7 @@ export function WaveformCanvas({
 }: WaveformCanvasProps) {
   const internalRef = useRef<HTMLCanvasElement>(null);
   const ref = externalRef || internalRef;
-  const sizeRef = useRef({ w: 0, h: 0 });
+  const [canvasSize, setCanvasSize] = useState({ w: 0, h: 0 });
   const rafRef = useRef<number>(0);
 
   // ResizeObserver
@@ -39,10 +39,10 @@ export function WaveformCanvas({
         const dpr = window.devicePixelRatio || 1;
         const w = Math.round(entry.contentRect.width * dpr);
         const h = Math.round(entry.contentRect.height * dpr);
-        if (w > 0 && h > 0 && (w !== sizeRef.current.w || h !== sizeRef.current.h)) {
-          sizeRef.current = { w, h };
+        if (w > 0 && h > 0) {
           canvas.width = w;
           canvas.height = h;
+          setCanvasSize({ w, h });
         }
       }
     });
@@ -116,7 +116,7 @@ export function WaveformCanvas({
         ctx.stroke();
       }
     }
-  }, [data, peakColor, rmsColor, backgroundColor, viewport, ref, sizeRef.current.w, sizeRef.current.h]);
+  }, [data, peakColor, rmsColor, backgroundColor, viewport, ref, canvasSize.w, canvasSize.h]);
 
   // Crosshair overlay via rAF
   useEffect(() => {
