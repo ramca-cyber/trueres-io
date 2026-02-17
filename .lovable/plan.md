@@ -1,57 +1,54 @@
 
 
-# Fix: "createMediaElementSource" Error on File Change
+# Fix: Prevent Simultaneous Audio Playback
+
+## Problem
+When the mini player is opened (via the minimize button), both the full MediaPlayer and the MiniPlayer play audio at the same time. The same can happen in reverse when navigating back from the mini player to the full player.
 
 ## Root Cause
+- The "minimize" action activates the MiniPlayer but never pauses the MediaPlayer's audio/video element
+- The "maximize" action (clicking the expand button on MiniPlayer) navigates to `/media-player` but never deactivates the MiniPlayer
+- No coordination exists between the two playback sources
 
-In `src/components/shared/AudioPlayer.tsx`, the Web Audio graph setup effect (line 51-105) depends on `[url]`. Every time a new file is loaded, `url` changes, the effect re-runs, and calls `ctx.createMediaElementSource(el)` on the same `<audio>` element. However, the Web Audio spec only allows an `HTMLMediaElement` to be connected to a `MediaElementSourceNode` **once in its lifetime** -- even after the previous `AudioContext` is closed.
+## Fix (3 changes, 2 files)
 
-## Fix
-
-**Strategy**: Create the `MediaElementSourceNode` only once per `<audio>` element mount, and keep it alive across file changes. The audio graph (filters, gain, analyser) is created once and reused. Only the `src` attribute on the `<audio>` element changes when a new file is loaded.
-
-### Changes to `src/components/shared/AudioPlayer.tsx`
-
-1. **Remove `url` from the Web Audio effect's dependency array** (line 105) -- change it to `[]` (mount-only) or use a ref-based guard.
-
-2. **Use a ref-based guard** to ensure `createMediaElementSource` is only called once per element:
-   - Add a `connectedRef = useRef(false)` flag
-   - In the effect, check `if (connectedRef.current) return;` before creating the source
-   - Set `connectedRef.current = true` after connecting
-
-3. **Do NOT close the AudioContext on cleanup** of this effect (since the source can't be re-created). Instead, close it only on component unmount via a separate cleanup effect.
-
-4. **Keep the `url` effect separate** (lines 44-48) -- it already correctly manages object URLs independently.
-
-### Technical Detail
+### 1. MediaPlayer: Pause before minimizing
+In `handleMinimize`, pause the current audio/video element before activating the MiniPlayer:
 
 ```
-// Before (breaks on 2nd file):
-useEffect(() => {
-  const el = innerRef.current;
-  if (!el || ctxRef.current) return;    // guard fails after cleanup nulls ctxRef
-  const ctx = new AudioContext();
-  const source = ctx.createMediaElementSource(el);  // CRASH
-  ...
-}, [url]);
-
-// After (works):
-useEffect(() => {
-  const el = innerRef.current;
-  if (!el || sourceRef.current) return;  // only create once per element
-  const ctx = new AudioContext();
-  const source = ctx.createMediaElementSource(el);
-  ...
-  // no cleanup that nulls refs -- graph stays alive
-}, []);
-
-// Separate unmount cleanup:
-useEffect(() => {
-  return () => {
-    ctxRef.current?.close().catch(() => {});
-  };
-}, []);
+const handleMinimize = useCallback(() => {
+  if (queue.length > 0) {
+    // Pause current playback first
+    const el = audioRef.current || videoRef.current;
+    if (el) el.pause();
+    miniPlayer.activate(queue, currentIndex);
+    miniPlayer.setPlaying(true);
+  }
+}, [queue, currentIndex, miniPlayer]);
 ```
 
-This is a one-file fix affecting only `src/components/shared/AudioPlayer.tsx`.
+### 2. MediaPlayer: Deactivate MiniPlayer on mount
+When the MediaPlayer page mounts (or when the component has an active queue), deactivate the MiniPlayer to prevent overlap:
 
+```
+useEffect(() => {
+  if (miniPlayer.active) {
+    miniPlayer.deactivate();
+  }
+}, []); // on mount only
+```
+
+### 3. MiniPlayer: Pause before navigating to full player
+In the MiniPlayer's "maximize" button handler, deactivate (which stops its audio) before navigating:
+
+```
+// Currently:
+onClick={() => navigate('/media-player')}
+
+// Fixed:
+onClick={() => { deactivate(); navigate('/media-player'); }}
+```
+
+## Files Changed
+- `src/pages/tools/MediaPlayer.tsx` -- pause before minimize + deactivate MiniPlayer on mount
+- `src/components/shared/MiniPlayer.tsx` -- deactivate before navigating to full player
