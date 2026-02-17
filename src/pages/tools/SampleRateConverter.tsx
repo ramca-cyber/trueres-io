@@ -17,7 +17,7 @@ const tool = getToolById('sample-rate-converter')!;
 const SampleRateConverter = () => {
   const [file, setFile] = useState<File | null>(null);
   const [targetRate, setTargetRate] = useState('48000');
-  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -27,7 +27,7 @@ const SampleRateConverter = () => {
     const outName = `resampled.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = resampleArgs(inputName, outName, parseInt(targetRate));
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'resampled';
@@ -54,7 +54,7 @@ const SampleRateConverter = () => {
           </div>
 
           {processing && <ProgressBar value={progress} label="Resampling..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
           <div className="flex gap-3">
             <Button onClick={handleResample} disabled={processing || loading}>

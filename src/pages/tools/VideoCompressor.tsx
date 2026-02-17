@@ -17,7 +17,7 @@ const tool = getToolById('video-compressor')!;
 const VideoCompressor = () => {
   const [file, setFile] = useState<File | null>(null);
   const [crf, setCrf] = useState(28);
-  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -26,7 +26,7 @@ const VideoCompressor = () => {
     const outName = 'compressed.mp4';
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = videoCompressArgs(inputName, outName, crf);
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'compressed';
@@ -51,7 +51,7 @@ const VideoCompressor = () => {
             </div>
           </div>
           {processing && <ProgressBar value={progress} label="Compressing..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
           <div className="flex gap-3">
             <Button onClick={handleCompress} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

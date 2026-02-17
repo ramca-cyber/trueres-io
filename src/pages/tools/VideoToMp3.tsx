@@ -17,7 +17,7 @@ const tool = getToolById('video-to-mp3')!;
 const VideoToMp3 = () => {
   const [file, setFile] = useState<File | null>(null);
   const [bitrate, setBitrate] = useState(320);
-  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -26,7 +26,7 @@ const VideoToMp3 = () => {
     const outName = 'output.mp3';
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = videoToMp3Args(inputName, outName, bitrate);
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'audio';
@@ -50,7 +50,7 @@ const VideoToMp3 = () => {
             </Select>
           </div>
           {processing && <ProgressBar value={progress} label="Extracting audio..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
           <div className="flex gap-3">
             <Button onClick={handleExtract} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

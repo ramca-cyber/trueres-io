@@ -18,7 +18,7 @@ const AudioTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
   const [startTime, setStartTime] = useState('0');
   const [endTime, setEndTime] = useState('30');
-  const { process, processing, progress, outputBlob, loading, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
   const handleFileSelect = (f: File) => {
     setFile(f);
@@ -31,7 +31,7 @@ const AudioTrimmer = () => {
     const outName = `trimmed.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = trimArgs(inputName, outName, parseFloat(startTime), parseFloat(endTime));
-    await process(file, outName, args);
+    await process(file, inputName, outName, args);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'trimmed';
@@ -57,7 +57,7 @@ const AudioTrimmer = () => {
           </div>
 
           {processing && <ProgressBar value={progress} label="Trimming..." sublabel={`${progress}%`} />}
-          {processError && <p className="text-sm text-destructive">{processError}</p>}
+          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
 
           <div className="flex gap-3">
             <Button onClick={handleTrim} disabled={processing || loading}>
