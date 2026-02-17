@@ -5,6 +5,7 @@ import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { MetricCard } from '@/components/display/MetricCard';
 import { ComplianceBadge } from '@/components/display/ComplianceBadge';
+import { LoudnessHistoryCanvas } from '@/components/visualizations/LoudnessHistoryCanvas';
 import { getToolById } from '@/config/tool-registry';
 import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
@@ -27,6 +28,10 @@ const LufsMeter = () => {
 
   const lufs = getResult<LUFSResult>('lufs');
 
+  const momentaryMax = lufs?.momentary?.length
+    ? Math.max(...lufs.momentary.filter(isFinite))
+    : null;
+
   return (
     <ToolPage tool={tool}>
       {!fileName && (
@@ -43,7 +48,7 @@ const LufsMeter = () => {
 
           {lufs && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <MetricCard
                   label="Integrated LUFS"
                   value={isFinite(lufs.integrated) ? `${lufs.integrated.toFixed(1)}` : '—'}
@@ -68,7 +73,20 @@ const LufsMeter = () => {
                   subtext="LUFS (3s window)"
                   status="neutral"
                 />
+                <MetricCard
+                  label="Momentary Max"
+                  value={momentaryMax !== null && isFinite(momentaryMax) ? `${momentaryMax.toFixed(1)}` : '—'}
+                  subtext="LUFS (400ms window)"
+                  status="neutral"
+                />
               </div>
+
+              {lufs.shortTerm.length > 1 && (
+                <LoudnessHistoryCanvas
+                  shortTerm={lufs.shortTerm}
+                  momentary={lufs.momentary}
+                />
+              )}
 
               <div>
                 <h3 className="text-sm font-heading font-semibold mb-2">Platform Compliance</h3>
