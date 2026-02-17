@@ -3,6 +3,7 @@ import { Header } from './Header';
 import { Footer } from './Footer';
 import { ToolNav } from './ToolNav';
 import { BrowserCompatBanner } from '@/components/shared/BrowserCompatBanner';
+import { MiniPlayer } from '@/components/shared/MiniPlayer';
 
 interface AppShellProps {
   children: ReactNode;
@@ -32,6 +33,7 @@ export function AppShell({ children }: AppShellProps) {
         </main>
       </div>
       <Footer />
+      <MiniPlayer />
     </div>
   );
 }
