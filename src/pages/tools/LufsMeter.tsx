@@ -13,12 +13,18 @@ import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 import { type LUFSResult } from '@/types/analysis';
 
 const tool = getToolById('lufs-meter')!;
 
 const LufsMeter = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, decodeError, file } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
   const { runAnalysis, getResult } = useAnalysis();
   const [analyzing, setAnalyzing] = useState(false);
 

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -15,6 +15,7 @@ import { analyzeBandwidth } from '@/engines/analysis/modules/bandwidth';
 import { type LUFSResult, type DynamicRangeResult, type BandwidthResult } from '@/types/analysis';
 import { type HeaderParseResult } from '@/types/audio';
 import { RotateCcw } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('audio-compare')!;
 
@@ -60,6 +61,11 @@ const AudioComparator = () => {
       console.error('Analysis failed:', e);
     }
     setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) { setRawFileA(pending); analyzeFile(pending, setFileA, setLoadingA); }
   }, []);
 
   const reset = () => { setFileA(null); setFileB(null); setRawFileA(null); setRawFileB(null); };

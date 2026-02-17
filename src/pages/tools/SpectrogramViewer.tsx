@@ -12,6 +12,7 @@ import { AUDIO_ACCEPT, FFT_SIZES, COLORMAPS, type Colormap } from '@/config/cons
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 import { type SpectrogramData } from '@/types/analysis';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -19,6 +20,11 @@ const tool = getToolById('spectrogram')!;
 
 const SpectrogramViewer = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, file } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
   const { runAnalysis, getResult } = useAnalysis();
   const [colormap, setColormap] = useState<Colormap>('magma');
   const [minDb, setMinDb] = useState(-120);

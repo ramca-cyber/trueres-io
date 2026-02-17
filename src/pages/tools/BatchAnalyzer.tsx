@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { ProgressBar } from '@/components/shared/ProgressBar';
@@ -10,6 +10,7 @@ import { measureLUFS } from '@/engines/analysis/modules/lufs';
 import { measureDynamicRange } from '@/engines/analysis/modules/dynamic-range';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Download, RotateCcw, Plus } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('batch-analyzer')!;
 
@@ -77,6 +78,11 @@ const BatchAnalyzer = () => {
     setProgress(100);
     setProcessing(false);
   }, [results]);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) handleFiles([pending]);
+  }, []);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);

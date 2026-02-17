@@ -12,6 +12,7 @@ import { AUDIO_ACCEPT } from '@/config/constants';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { useAnalysis } from '@/hooks/use-analysis';
 import { useAudioStore } from '@/stores/audio-store';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 import { type WaveformData } from '@/types/analysis';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
@@ -21,6 +22,11 @@ const ZOOM_LEVELS = [1, 2, 4, 8, 16];
 
 const WaveformViewer = () => {
   const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, file } = useAudioFile();
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) loadFile(pending);
+  }, []);
   const { runAnalysis, getResult } = useAnalysis();
   const [zoomIdx, setZoomIdx] = useState(0);
 

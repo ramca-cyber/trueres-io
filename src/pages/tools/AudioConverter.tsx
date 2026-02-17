@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -12,11 +12,17 @@ import { audioConvertArgs, AUDIO_OUTPUT_FORMATS, MP3_BITRATES } from '@/engines/
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
+import { useFileTransferStore } from '@/stores/file-transfer-store';
 
 const tool = getToolById('audio-converter')!;
 
 const AudioConverter = () => {
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) setFile(pending);
+  }, []);
   const [outputFormat, setOutputFormat] = useState('mp3');
   const [bitrate, setBitrate] = useState(320);
   const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
