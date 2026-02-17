@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X, Search, Shield } from 'lucide-react';
+import { Menu, X, Search } from 'lucide-react';
+import logoImg from '@/assets/logo.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -27,7 +28,7 @@ export function Header() {
       <div className="container flex h-14 items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 font-heading text-lg font-bold tracking-tight">
-          <Shield className="h-6 w-6 text-primary" />
+          <img src={logoImg} alt="TrueRes.io logo" className="h-7 w-7" />
           <span>TrueRes<span className="text-primary">.io</span></span>
         </Link>
 
@@ -78,7 +79,7 @@ export function Header() {
           <SheetContent side="left" className="w-80 p-0 bg-card">
             <div className="p-4 border-b border-border">
               <Link to="/" className="flex items-center gap-2 font-heading text-lg font-bold" onClick={() => setMobileNavOpen(false)}>
-                <Shield className="h-6 w-6 text-primary" />
+                <img src={logoImg} alt="TrueRes.io logo" className="h-7 w-7" />
                 <span>TrueRes<span className="text-primary">.io</span></span>
               </Link>
             </div>
