@@ -65,9 +65,9 @@ const LufsMeter = () => {
                   status={lufs.integrated > -10 ? 'warn' : lufs.integrated < -20 ? 'info' : 'pass'}
                 />
                 <MetricCard
-                  label="True Peak"
-                  value={isFinite(lufs.truePeak) ? `${lufs.truePeak.toFixed(1)} dB` : '—'}
-                  subtext="Maximum sample peak"
+                  label="Sample Peak"
+                  value={isFinite(lufs.truePeak) ? `${lufs.truePeak.toFixed(1)} dBFS` : '—'}
+                  subtext="Per-sample max (not true peak)"
                   status={lufs.truePeak > -1 ? 'fail' : 'pass'}
                 />
                 <MetricCard
