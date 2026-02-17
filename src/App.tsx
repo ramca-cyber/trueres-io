@@ -64,7 +64,7 @@ const ClippingDetector = lazy(() => import("./pages/tools/ClippingDetector"));
 const RoomAnalyzer = lazy(() => import("./pages/tools/RoomAnalyzer"));
 const IRViewer = lazy(() => import("./pages/tools/IRViewer"));
 const BitPerfectTest = lazy(() => import("./pages/tools/BitPerfectTest"));
-const CrossfeedSimulator = lazy(() => import("./pages/tools/CrossfeedSimulator"));
+const CrossfeedSimulator = lazy(() => import("./pages/tools/CrossfeedSimulator")); // headphone tool
 const BinauralBeats = lazy(() => import("./pages/tools/BinauralBeats"));
 const SoundstageTest = lazy(() => import("./pages/tools/SoundstageTest"));
 const ChannelBalance = lazy(() => import("./pages/tools/ChannelBalance"));
