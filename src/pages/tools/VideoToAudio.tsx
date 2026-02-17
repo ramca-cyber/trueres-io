@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -21,7 +22,6 @@ const VideoToAudio = () => {
 
   const handleExtract = async () => {
     if (!file) return;
-    // Default to m4a for mp4/mov, ogg for webm, otherwise m4a
     const ext = file.name.split('.').pop()?.toLowerCase() || 'mp4';
     const audioExt = (ext === 'webm') ? 'ogg' : 'm4a';
     const outName = `audio.${audioExt}`;
@@ -58,6 +58,7 @@ const VideoToAudio = () => {
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">Audio extracted (original codec, no re-encoding)!</p>
+              <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}.${audioExt}`} label="Download audio" />
             </div>
           )}

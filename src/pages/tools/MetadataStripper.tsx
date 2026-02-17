@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -38,6 +39,7 @@ const MetadataStripper = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <AudioPlayer src={file} label="Input" />
 
           <div className="rounded-lg border border-border bg-card/50 p-4 flex items-start gap-3">
             <ShieldCheck className="h-5 w-5 text-status-pass shrink-0 mt-0.5" />
@@ -64,6 +66,7 @@ const MetadataStripper = () => {
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">All metadata removed successfully!</p>
+              <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_clean.${ext}`} label="Download clean file" />
             </div>
           )}

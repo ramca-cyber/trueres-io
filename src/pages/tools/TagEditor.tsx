@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { getToolById } from '@/config/tool-registry';
 import { useAudioFile } from '@/hooks/use-audio-file';
 import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
@@ -9,7 +10,7 @@ import { Table, TableBody, TableCell, TableRow } from '@/components/ui/table';
 const tool = getToolById('tag-editor')!;
 
 const TagEditor = () => {
-  const { loadFile, fileName, fileSize, headerInfo, metadata } = useAudioFile();
+  const { loadFile, fileName, fileSize, headerInfo, metadata, file } = useAudioFile();
 
   if (!fileName) {
     return (
@@ -44,6 +45,8 @@ const TagEditor = () => {
           sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth}
           channels={headerInfo?.channels}
         />
+
+        {file && <AudioPlayer src={file} label="Preview" />}
 
         {metadata?.coverArt && (
           <div className="flex justify-center">

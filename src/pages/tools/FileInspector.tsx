@@ -1,4 +1,5 @@
 import { ToolPage } from '@/components/shared/ToolPage';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { getToolById } from '@/config/tool-registry';
@@ -9,7 +10,7 @@ import { useAudioStore } from '@/stores/audio-store';
 const tool = getToolById('file-inspector')!;
 
 const FileInspector = () => {
-  const { loadFile, fileName, fileSize, headerInfo, metadata } = useAudioFile();
+  const { loadFile, fileName, fileSize, headerInfo, metadata, file } = useAudioFile();
 
   return (
     <ToolPage tool={tool}>
@@ -20,6 +21,7 @@ const FileInspector = () => {
       {fileName && (
         <div className="space-y-4">
           <FileInfoBar fileName={fileName} fileSize={fileSize} format={headerInfo?.format} duration={headerInfo?.duration} sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth} channels={headerInfo?.channels} />
+          {file && <AudioPlayer src={file} label="Preview" />}
 
           {/* Format details */}
           {headerInfo && (

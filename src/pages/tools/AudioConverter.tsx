@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -40,10 +41,11 @@ const AudioConverter = () => {
   return (
     <ToolPage tool={tool}>
       {!file ? (
-        <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={handleFileSelect} label="Drop your audio file here" sublabel="Any supported audio format" />
+        <FileDropZone accept={AUDIO_ACCEPT} onFileSelect={(f) => { setFile(f); clearOutput(); }} label="Drop your audio file here" sublabel="Any supported audio format" />
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <AudioPlayer src={file} label="Input" />
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -99,6 +101,7 @@ const AudioConverter = () => {
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">Conversion complete!</p>
+              <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}.${fmt?.ext || 'mp3'}`} label={`Download ${fmt?.label || 'file'}`} />
             </div>
           )}

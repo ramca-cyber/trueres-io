@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
@@ -15,7 +16,7 @@ import { type SpectrumData } from '@/types/analysis';
 const tool = getToolById('spectrum-analyzer')!;
 
 const SpectrumAnalyzer = () => {
-  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress } = useAudioFile();
+  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, file } = useAudioFile();
   const { runAnalysis, getResult } = useAnalysis();
 
   const spectrumData = getResult<SpectrumData & { type: string; timestamp: number; duration: number }>('spectrum');
@@ -55,6 +56,7 @@ const SpectrumAnalyzer = () => {
           sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth}
           channels={headerInfo?.channels}
         />
+        {file && <AudioPlayer src={file} label="Preview" />}
         {decoding && <ProgressBar value={decodeProgress} label="Decoding audio..." sublabel={`${decodeProgress}%`} />}
         {!spectrumData && pcm && <ProgressBar value={50} label="Computing spectrum..." />}
 

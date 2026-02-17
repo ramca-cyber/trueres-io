@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
 import { ProgressBar } from '@/components/shared/ProgressBar';
@@ -19,7 +20,7 @@ const tool = getToolById('waveform-viewer')!;
 const ZOOM_LEVELS = [1, 2, 4, 8, 16];
 
 const WaveformViewer = () => {
-  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress } = useAudioFile();
+  const { loadFile, fileName, fileSize, headerInfo, pcm, decoding, decodeProgress, file } = useAudioFile();
   const { runAnalysis, getResult } = useAnalysis();
   const [zoomIdx, setZoomIdx] = useState(0);
 
@@ -62,6 +63,7 @@ const WaveformViewer = () => {
           sampleRate={headerInfo?.sampleRate} bitDepth={headerInfo?.bitDepth}
           channels={headerInfo?.channels}
         />
+        {file && <AudioPlayer src={file} label="Preview" />}
 
         {waveformData && (
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

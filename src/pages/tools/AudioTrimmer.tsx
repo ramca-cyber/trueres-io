@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
+import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
@@ -20,10 +21,7 @@ const AudioTrimmer = () => {
   const [endTime, setEndTime] = useState('30');
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
 
-  const handleFileSelect = (f: File) => {
-    setFile(f);
-    clearOutput();
-  };
+  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
   const handleTrim = async () => {
     if (!file) return;
@@ -44,6 +42,7 @@ const AudioTrimmer = () => {
       ) : (
         <div className="space-y-4">
           <FileInfoBar fileName={file.name} fileSize={file.size} />
+          <AudioPlayer src={file} label="Input" />
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -70,6 +69,7 @@ const AudioTrimmer = () => {
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">Trim complete!</p>
+              <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_trimmed.${ext}`} label="Download trimmed file" />
             </div>
           )}
