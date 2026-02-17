@@ -51,6 +51,11 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
   'bluetooth-codecs': [
     { q: 'Which Bluetooth codec has the best quality?', a: 'LDAC at 990kbps offers the highest quality, approaching CD quality. aptX HD and LHDC are also high-quality options. SBC is the baseline codec with the lowest quality.' },
   ],
+  'media-player': [
+    { q: 'What formats are supported?', a: 'WAV, FLAC, AIFF, MP3, OGG, AAC, M4A, MP4, WebM, AVI, MKV, and MOV. Playback depends on your browser\'s native codec support.' },
+    { q: 'Is my file uploaded anywhere?', a: 'No. Your file stays on your device. The player uses a local object URL — nothing is sent to any server.' },
+    { q: 'Why can\'t I play MKV or AVI files?', a: 'Some containers (MKV, AVI) may not be natively supported by all browsers. Chrome generally has the widest format support. Try converting with the Video Converter tool.' },
+  ],
 };
 
 /**
