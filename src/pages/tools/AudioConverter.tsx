@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { audioConvertArgs, AUDIO_OUTPUT_FORMATS, MP3_BITRATES } from '@/engines/processing/presets';
 import { Button } from '@/components/ui/button';
@@ -100,7 +100,10 @@ const AudioConverter = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Conversion complete!</p>
+              <p className="text-sm text-muted-foreground">
+                Conversion complete! {formatFileSize(outputBlob.size)}
+                {file && outputBlob.size !== file.size && ` (${outputBlob.size < file.size ? `${Math.round((1 - outputBlob.size / file.size) * 100)}% smaller` : `${Math.round((outputBlob.size / file.size - 1) * 100)}% larger`})`}
+              </p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}.${fmt?.ext || 'mp3'}`} label={`Download ${fmt?.label || 'file'}`} />
             </div>

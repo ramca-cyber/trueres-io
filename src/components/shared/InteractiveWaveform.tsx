@@ -9,6 +9,7 @@ interface InteractiveWaveformProps {
   onEndChange: (t: number) => void;
   currentTime: number;
   onSeek?: (t: number) => void;
+  onTogglePlay?: () => void;
   className?: string;
 }
 
@@ -34,12 +35,15 @@ export const InteractiveWaveform = ({
   onEndChange,
   currentTime,
   onSeek,
+  onTogglePlay,
   className,
 }: InteractiveWaveformProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<'start' | 'end' | null>(null);
+  const [hovering, setHovering] = useState<'start' | 'end' | null>(null);
   const [canvasWidth, setCanvasWidth] = useState(800);
+  const [lastHandle, setLastHandle] = useState<'start' | 'end'>('end');
   const waveformRef = useRef<{ peaks: Float32Array; rms: Float32Array } | null>(null);
   const duration = audioBuffer.duration;
 
@@ -61,6 +65,41 @@ export const InteractiveWaveform = ({
     obs.observe(el);
     return () => obs.disconnect();
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only respond when our container or canvas is focused
+      if (!containerRef.current?.contains(document.activeElement)) return;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        onTogglePlay?.();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        const step = e.shiftKey ? 1 : 0.1;
+        if (lastHandle === 'start') {
+          onStartChange(Math.max(0, startTime - step));
+        } else {
+          onEndChange(Math.max(startTime + 0.1, endTime - step));
+        }
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        const step = e.shiftKey ? 1 : 0.1;
+        if (lastHandle === 'start') {
+          onStartChange(Math.min(endTime - 0.1, startTime + step));
+        } else {
+          onEndChange(Math.min(duration, endTime + step));
+        }
+      } else if (e.code === 'Tab') {
+        e.preventDefault();
+        setLastHandle(prev => prev === 'start' ? 'end' : 'start');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [startTime, endTime, duration, lastHandle, onStartChange, onEndChange, onTogglePlay]);
 
   // Draw
   useEffect(() => {
@@ -151,26 +190,36 @@ export const InteractiveWaveform = ({
     return Math.max(0, Math.min(duration, (x / rect.width) * duration));
   }, [duration]);
 
-  const handlePointerDown = useCallback((e: React.PointerEvent) => {
-    const t = getTimeFromX(e.clientX);
+  const isOverHandle = useCallback((clientX: number): 'start' | 'end' | null => {
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const px = clientX - rect.left;
     const startX = (startTime / duration) * canvasWidth;
     const endX = (endTime / duration) * canvasWidth;
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const px = e.clientX - rect.left;
+    if (Math.abs(px - startX) < HANDLE_WIDTH * 2) return 'start';
+    if (Math.abs(px - endX) < HANDLE_WIDTH * 2) return 'end';
+    return null;
+  }, [startTime, endTime, duration, canvasWidth]);
 
-    if (Math.abs(px - startX) < HANDLE_WIDTH * 2) {
-      setDragging('start');
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } else if (Math.abs(px - endX) < HANDLE_WIDTH * 2) {
-      setDragging('end');
+  const handlePointerDown = useCallback((e: React.PointerEvent) => {
+    const t = getTimeFromX(e.clientX);
+    const handle = isOverHandle(e.clientX);
+
+    if (handle) {
+      setDragging(handle);
+      setLastHandle(handle);
       e.currentTarget.setPointerCapture(e.pointerId);
     } else if (onSeek) {
       onSeek(t);
     }
-  }, [getTimeFromX, startTime, endTime, duration, canvasWidth, onSeek]);
+  }, [getTimeFromX, isOverHandle, onSeek]);
 
   const handlePointerMove = useCallback((e: React.PointerEvent) => {
+    // Update hover state for cursor
+    if (!dragging) {
+      setHovering(isOverHandle(e.clientX));
+    }
+
     if (!dragging) return;
     const t = getTimeFromX(e.clientX);
     if (dragging === 'start') {
@@ -178,24 +227,34 @@ export const InteractiveWaveform = ({
     } else {
       onEndChange(Math.max(t, startTime + 0.1));
     }
-  }, [dragging, getTimeFromX, startTime, endTime, onStartChange, onEndChange]);
+  }, [dragging, getTimeFromX, startTime, endTime, onStartChange, onEndChange, isOverHandle]);
 
   const handlePointerUp = useCallback(() => {
     setDragging(null);
   }, []);
 
+  const handlePointerLeave = useCallback(() => {
+    if (!dragging) setHovering(null);
+  }, [dragging]);
+
+  const cursorClass = dragging || hovering ? 'cursor-ew-resize' : 'cursor-crosshair';
+
   return (
-    <div ref={containerRef} className={className}>
+    <div ref={containerRef} className={className} tabIndex={0}>
       <canvas
         ref={canvasRef}
-        className="w-full rounded-md cursor-crosshair border border-border"
+        className={`w-full rounded-md border border-border ${cursorClass}`}
         style={{ height: 120, touchAction: 'none' }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
+        onPointerLeave={handlePointerLeave}
       />
       <div className="flex justify-between text-xs text-muted-foreground mt-1 px-1">
         <span>0:00</span>
+        <span className="text-[10px] opacity-60">
+          Space: play · ←→: nudge {lastHandle} · Tab: switch handle
+        </span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>

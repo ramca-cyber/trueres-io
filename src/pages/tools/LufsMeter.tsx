@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { FileDropZone } from '@/components/shared/FileDropZone';
@@ -97,9 +98,9 @@ const LufsMeter = () => {
             </>
           )}
 
-          <button onClick={() => useAudioStore.getState().clear()} className="text-xs text-muted-foreground hover:text-foreground underline">
+          <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
             Analyze another file
-          </button>
+          </Button>
         </div>
       )}
     </ToolPage>

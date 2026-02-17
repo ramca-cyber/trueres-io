@@ -8,6 +8,7 @@ import { getToolById } from '@/config/tool-registry';
 import { VIDEO_ACCEPT } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { videoCompressArgs } from '@/engines/processing/presets';
+import { formatFileSize } from '@/config/constants';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Loader2 } from 'lucide-react';
@@ -17,7 +18,7 @@ const tool = getToolById('video-compressor')!;
 const VideoCompressor = () => {
   const [file, setFile] = useState<File | null>(null);
   const [crf, setCrf] = useState(28);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -50,8 +51,18 @@ const VideoCompressor = () => {
               <span>Smaller file</span>
             </div>
           </div>
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Compressing..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleCompress(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
           <div className="flex gap-3">
             <Button onClick={handleCompress} disabled={processing || loading}>
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -62,7 +73,8 @@ const VideoCompressor = () => {
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
               <p className="text-sm text-muted-foreground">
-                Compressed! {file && `${(file.size / 1024 / 1024).toFixed(1)} MB → ${(outputBlob.size / 1024 / 1024).toFixed(1)} MB (${Math.round((1 - outputBlob.size / file.size) * 100)}% reduction)`}
+                Compressed! {formatFileSize(outputBlob.size)}
+                {file && ` (${Math.round((1 - outputBlob.size / file.size) * 100)}% ${outputBlob.size < file.size ? 'smaller' : 'larger'})`}
               </p>
               <DownloadButton blob={outputBlob} filename={`${baseName}_compressed.mp4`} label="Download compressed video" />
             </div>

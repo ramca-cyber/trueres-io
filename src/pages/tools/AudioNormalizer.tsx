@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useAudioPreview } from '@/hooks/use-audio-preview';
 import { normalizeArgs } from '@/engines/processing/presets';
@@ -27,7 +27,7 @@ const AudioNormalizer = () => {
   const [file, setFile] = useState<File | null>(null);
   const [targetLUFS, setTargetLUFS] = useState('-14');
   const [previewMode, setPreviewMode] = useState<'original' | 'normalized'>('original');
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playWithGain, playRegion, stop, duration } = useAudioPreview(file);
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -42,12 +42,17 @@ const AudioNormalizer = () => {
   };
 
   const handlePreview = (mode: 'original' | 'normalized') => {
+    // If clicking the same mode that's playing, stop it
+    if (isPlaying && previewMode === mode) {
+      stop();
+      return;
+    }
+    // Otherwise switch directly (stop first, then play new mode)
     stop();
     setPreviewMode(mode);
     if (mode === 'original') {
       playRegion(0, duration);
     } else {
-      // Approximate gain difference for preview
       const target = TARGETS.find(t => t.value === targetLUFS);
       playWithGain(target?.gain ?? 0);
     }
@@ -82,7 +87,7 @@ const AudioNormalizer = () => {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => isPlaying ? stop() : handlePreview('original')}
+                onClick={() => handlePreview('original')}
               >
                 {isPlaying && previewMode === 'original' ? <Square className="h-3 w-3 mr-1.5" /> : <Play className="h-3 w-3 mr-1.5" />}
                 Original
@@ -90,7 +95,7 @@ const AudioNormalizer = () => {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => isPlaying ? stop() : handlePreview('normalized')}
+                onClick={() => handlePreview('normalized')}
               >
                 {isPlaying && previewMode === 'normalized' ? <Square className="h-3 w-3 mr-1.5" /> : <Volume2 className="h-3 w-3 mr-1.5" />}
                 Preview {targetLUFS} LUFS
@@ -99,8 +104,18 @@ const AudioNormalizer = () => {
             </div>
           )}
 
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Normalizing..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleNormalize(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3">
             <Button onClick={handleNormalize} disabled={processing || loading}>
@@ -112,7 +127,7 @@ const AudioNormalizer = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Normalization complete! Target: {targetLUFS} LUFS</p>
+              <p className="text-sm text-muted-foreground">Normalization complete! Target: {targetLUFS} LUFS — {formatFileSize(outputBlob.size)}</p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_normalized.${ext}`} label="Download normalized file" />
             </div>

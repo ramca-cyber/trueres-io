@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -11,6 +11,18 @@ const tool = getToolById('tag-editor')!;
 
 const TagEditor = () => {
   const { loadFile, fileName, fileSize, headerInfo, metadata, file } = useAudioFile();
+
+  // Fix memory leak: manage cover art object URL lifecycle
+  const coverArtUrl = useMemo(() => {
+    if (!metadata?.coverArt) return null;
+    return URL.createObjectURL(metadata.coverArt);
+  }, [metadata?.coverArt]);
+
+  useEffect(() => {
+    return () => {
+      if (coverArtUrl) URL.revokeObjectURL(coverArtUrl);
+    };
+  }, [coverArtUrl]);
 
   if (!fileName) {
     return (
@@ -48,10 +60,10 @@ const TagEditor = () => {
 
         {file && <AudioPlayer src={file} label="Preview" />}
 
-        {metadata?.coverArt && (
+        {coverArtUrl && (
           <div className="flex justify-center">
             <img
-              src={URL.createObjectURL(metadata.coverArt)}
+              src={coverArtUrl}
               alt="Cover art"
               className="rounded-lg max-w-[200px] max-h-[200px] border border-border"
             />

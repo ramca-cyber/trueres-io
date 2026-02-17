@@ -6,7 +6,7 @@ import { AudioPlayer } from '@/components/shared/AudioPlayer';
 import { ProgressBar } from '@/components/shared/ProgressBar';
 import { DownloadButton } from '@/components/shared/DownloadButton';
 import { getToolById } from '@/config/tool-registry';
-import { AUDIO_ACCEPT } from '@/config/constants';
+import { AUDIO_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { useAudioPreview, type ChannelMode } from '@/hooks/use-audio-preview';
 import { channelArgs, type ChannelOp } from '@/engines/processing/presets';
@@ -26,7 +26,7 @@ const OPS: { value: ChannelOp; label: string; desc: string; previewMode: Channel
 const ChannelOps = () => {
   const [file, setFile] = useState<File | null>(null);
   const [op, setOp] = useState<ChannelOp>('mono');
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playChannel, stop } = useAudioPreview(file);
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -71,8 +71,18 @@ const ChannelOps = () => {
             <p className="text-xs text-muted-foreground">{OPS.find((o) => o.value === op)?.desc}</p>
           </div>
 
+          {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Processing..." sublabel={`${progress}%`} />}
-          {(processError || loadError) && <p className="text-sm text-destructive">{processError || loadError}</p>}
+          {(processError || loadError) && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
+              <p className="text-sm text-destructive">{processError || loadError}</p>
+              {loadError && (
+                <Button variant="outline" size="sm" onClick={() => { reset(); handleProcess(); }}>
+                  Retry
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 flex-wrap">
             {audioBuffer && (
@@ -91,7 +101,7 @@ const ChannelOps = () => {
 
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">Channel operation complete!</p>
+              <p className="text-sm text-muted-foreground">Channel operation complete! {formatFileSize(outputBlob.size)}</p>
               <AudioPlayer src={outputBlob} label="Output" />
               <DownloadButton blob={outputBlob} filename={`${baseName}_${op}.${ext}`} label="Download result" />
             </div>
