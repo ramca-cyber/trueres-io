@@ -1,10 +1,15 @@
 import { useRef, useEffect } from 'react';
+import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface LoudnessHistoryCanvasProps {
   shortTerm: number[];
   momentary?: number[];
   width?: number;
   height?: number;
+  viewport?: Viewport;
+  cursor?: CursorData | null;
+  canvasHandlers?: Record<string, any>;
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
 export function LoudnessHistoryCanvas({
@@ -12,11 +17,16 @@ export function LoudnessHistoryCanvas({
   momentary,
   width = 900,
   height = 220,
+  viewport,
+  cursor,
+  canvasHandlers,
+  canvasRef: externalRef,
 }: LoudnessHistoryCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const internalRef = useRef<HTMLCanvasElement>(null);
+  const ref = externalRef || internalRef;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
     if (!canvas || !shortTerm.length) return;
 
     canvas.width = width;
@@ -31,13 +41,31 @@ export function LoudnessHistoryCanvas({
     const plotW = width - paddingLeft - paddingRight;
     const plotH = height - paddingTop - paddingBottom;
 
-    const minLufs = -60;
-    const maxLufs = 0;
+    // LUFS range from viewport Y
+    const fullMinLufs = -60;
+    const fullMaxLufs = 0;
+    const lufsRange100 = fullMaxLufs - fullMinLufs;
+    const minLufs = viewport ? fullMinLufs + viewport.yMin * lufsRange100 : fullMinLufs;
+    const maxLufs = viewport ? fullMinLufs + viewport.yMax * lufsRange100 : fullMaxLufs;
     const range = maxLufs - minLufs;
+
+    // Time range from viewport X
+    const totalSamples = shortTerm.length;
+    const startIdx = viewport ? Math.floor(viewport.xMin * totalSamples) : 0;
+    const endIdx = viewport ? Math.ceil(viewport.xMax * totalSamples) : totalSamples;
+    const visibleCount = endIdx - startIdx;
+
+    const totalSeconds = shortTerm.length * 3; // 3s windows
+    const viewStartTime = (startIdx / totalSamples) * totalSeconds;
+    const viewEndTime = (endIdx / totalSamples) * totalSeconds;
 
     const toY = (v: number) => {
       const clamped = Math.max(minLufs, Math.min(maxLufs, v));
       return paddingTop + plotH * (1 - (clamped - minLufs) / range);
+    };
+
+    const toX = (i: number) => {
+      return paddingLeft + ((i - startIdx) / (visibleCount - 1 || 1)) * plotW;
     };
 
     // Grid lines
@@ -47,7 +75,8 @@ export function LoudnessHistoryCanvas({
     ctx.textAlign = 'right';
     ctx.lineWidth = 1;
 
-    for (let db = minLufs; db <= maxLufs; db += 10) {
+    const dbStep = range > 40 ? 10 : range > 20 ? 5 : 2;
+    for (let db = Math.ceil(minLufs / dbStep) * dbStep; db <= maxLufs; db += dbStep) {
       const y = toY(db);
       ctx.beginPath();
       ctx.moveTo(paddingLeft, y);
@@ -58,45 +87,45 @@ export function LoudnessHistoryCanvas({
 
     // Time axis
     ctx.textAlign = 'center';
-    const totalSeconds = shortTerm.length * 3; // 3s windows
-    const timeSteps = Math.min(6, shortTerm.length);
+    const timeSteps = Math.min(6, visibleCount);
     for (let i = 0; i <= timeSteps; i++) {
       const x = paddingLeft + (i / timeSteps) * plotW;
-      const t = (i / timeSteps) * totalSeconds;
+      const t = viewStartTime + (i / timeSteps) * (viewEndTime - viewStartTime);
       ctx.fillText(`${t.toFixed(0)}s`, x, height - 5);
     }
 
     // Draw momentary (background, lighter)
     if (momentary && momentary.length > 0) {
-      const finiteM = momentary.filter(isFinite);
-      if (finiteM.length > 0) {
-        ctx.strokeStyle = 'hsla(40, 80%, 55%, 0.25)';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        let started = false;
-        for (let i = 0; i < momentary.length; i++) {
-          if (!isFinite(momentary[i])) continue;
-          const x = paddingLeft + (i / (momentary.length - 1)) * plotW;
-          const y = toY(momentary[i]);
-          if (!started) { ctx.moveTo(x, y); started = true; }
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
+      // Map momentary indices to visible range
+      const mStart = Math.floor((startIdx / totalSamples) * momentary.length);
+      const mEnd = Math.ceil((endIdx / totalSamples) * momentary.length);
+      ctx.strokeStyle = 'hsla(40, 80%, 55%, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      let started = false;
+      for (let i = mStart; i < mEnd; i++) {
+        if (!isFinite(momentary[i])) continue;
+        const x = paddingLeft + ((i - mStart) / (mEnd - mStart - 1 || 1)) * plotW;
+        const y = toY(momentary[i]);
+        if (!started) { ctx.moveTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
       }
+      ctx.stroke();
     }
 
-    // Draw short-term (main line)
-    const finite = shortTerm.filter(isFinite);
+    // Draw short-term (main line) - visible range only
+    const visibleST = shortTerm.slice(startIdx, endIdx);
+    const finite = visibleST.filter(isFinite);
     if (finite.length > 0) {
       // Fill area under curve
       ctx.fillStyle = 'hsla(40, 95%, 55%, 0.1)';
       ctx.beginPath();
       let firstX = paddingLeft;
       let started = false;
-      for (let i = 0; i < shortTerm.length; i++) {
-        if (!isFinite(shortTerm[i])) continue;
-        const x = paddingLeft + (i / (shortTerm.length - 1)) * plotW;
-        const y = toY(shortTerm[i]);
+      for (let i = 0; i < visibleST.length; i++) {
+        if (!isFinite(visibleST[i])) continue;
+        const x = paddingLeft + (i / (visibleST.length - 1 || 1)) * plotW;
+        const y = toY(visibleST[i]);
         if (!started) { ctx.moveTo(x, paddingTop + plotH); ctx.lineTo(x, y); firstX = x; started = true; }
         else ctx.lineTo(x, y);
       }
@@ -109,10 +138,10 @@ export function LoudnessHistoryCanvas({
       ctx.lineWidth = 2;
       ctx.beginPath();
       started = false;
-      for (let i = 0; i < shortTerm.length; i++) {
-        if (!isFinite(shortTerm[i])) continue;
-        const x = paddingLeft + (i / (shortTerm.length - 1)) * plotW;
-        const y = toY(shortTerm[i]);
+      for (let i = 0; i < visibleST.length; i++) {
+        if (!isFinite(visibleST[i])) continue;
+        const x = paddingLeft + (i / (visibleST.length - 1 || 1)) * plotW;
+        const y = toY(visibleST[i]);
         if (!started) { ctx.moveTo(x, y); started = true; }
         else ctx.lineTo(x, y);
       }
@@ -124,12 +153,35 @@ export function LoudnessHistoryCanvas({
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('LUFS', paddingLeft + 4, paddingTop + 12);
-  }, [shortTerm, momentary, width, height]);
+
+    // Crosshair cursor
+    if (cursor) {
+      const cx = cursor.normX * width;
+      const cy = cursor.normY * height;
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx, paddingTop);
+      ctx.lineTo(cx, paddingTop + plotH);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, cy);
+      ctx.lineTo(paddingLeft + plotW, cy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }, [shortTerm, momentary, width, height, viewport, cursor, ref]);
 
   return (
     <div className="space-y-1">
       <h3 className="text-sm font-heading font-semibold">Loudness Over Time</h3>
-      <canvas ref={canvasRef} className="w-full rounded-md border border-border" />
+      <canvas
+        ref={ref as React.RefObject<HTMLCanvasElement>}
+        className="w-full rounded-md border border-border"
+        style={{ cursor: 'crosshair' }}
+        {...canvasHandlers}
+      />
     </div>
   );
 }

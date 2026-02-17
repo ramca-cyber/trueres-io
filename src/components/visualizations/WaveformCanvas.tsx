@@ -1,5 +1,6 @@
 import { useRef, useEffect } from 'react';
 import { type WaveformData } from '@/types/analysis';
+import { type Viewport, type CursorData } from '@/hooks/use-viz-viewport';
 
 interface WaveformCanvasProps {
   data: WaveformData;
@@ -9,6 +10,11 @@ interface WaveformCanvasProps {
   rmsColor?: string;
   backgroundColor?: string;
   channel?: number;
+  viewport?: Viewport;
+  cursor?: CursorData | null;
+  /** Event handlers from useVizViewport to spread onto the canvas */
+  canvasHandlers?: Record<string, any>;
+  canvasRef?: React.RefObject<HTMLCanvasElement | null>;
 }
 
 export function WaveformCanvas({
@@ -18,11 +24,16 @@ export function WaveformCanvas({
   peakColor = 'hsl(40, 95%, 55%)',
   rmsColor = 'hsl(40, 80%, 40%)',
   backgroundColor = 'transparent',
+  viewport,
+  cursor,
+  canvasHandlers,
+  canvasRef: externalRef,
 }: WaveformCanvasProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const internalRef = useRef<HTMLCanvasElement>(null);
+  const ref = externalRef || internalRef;
 
   useEffect(() => {
-    const canvas = canvasRef.current;
+    const canvas = (ref as React.RefObject<HTMLCanvasElement>).current;
     if (!canvas || !data.peaks.length) return;
 
     canvas.width = width;
@@ -31,7 +42,14 @@ export function WaveformCanvas({
 
     const midY = height / 2;
     const numBuckets = data.peaks.length;
-    const pxPerBucket = width / numBuckets;
+
+    // Viewport slicing
+    const xMin = viewport?.xMin ?? 0;
+    const xMax = viewport?.xMax ?? 1;
+    const startBucket = Math.floor(xMin * numBuckets);
+    const endBucket = Math.ceil(xMax * numBuckets);
+    const visibleBuckets = endBucket - startBucket;
+    const pxPerBucket = width / visibleBuckets;
 
     // Background
     if (backgroundColor !== 'transparent') {
@@ -51,16 +69,16 @@ export function WaveformCanvas({
 
     // Draw peak waveform (mirrored)
     ctx.fillStyle = peakColor;
-    for (let i = 0; i < numBuckets; i++) {
-      const x = i * pxPerBucket;
+    for (let i = startBucket; i < endBucket; i++) {
+      const x = (i - startBucket) * pxPerBucket;
       const peakH = data.peaks[i] * midY;
       ctx.fillRect(x, midY - peakH, Math.max(1, pxPerBucket - 0.5), peakH * 2);
     }
 
     // Draw RMS overlay
     ctx.fillStyle = rmsColor;
-    for (let i = 0; i < numBuckets; i++) {
-      const x = i * pxPerBucket;
+    for (let i = startBucket; i < endBucket; i++) {
+      const x = (i - startBucket) * pxPerBucket;
       const rmsH = data.rms[i] * midY;
       ctx.fillRect(x, midY - rmsH, Math.max(1, pxPerBucket - 0.5), rmsH * 2);
     }
@@ -82,12 +100,27 @@ export function WaveformCanvas({
         ctx.stroke();
       }
     }
-  }, [data, width, height, peakColor, rmsColor, backgroundColor]);
+
+    // Crosshair cursor
+    if (cursor) {
+      const cx = cursor.normX * width;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, height);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }, [data, width, height, peakColor, rmsColor, backgroundColor, viewport, cursor, ref]);
 
   return (
     <canvas
-      ref={canvasRef}
+      ref={ref as React.RefObject<HTMLCanvasElement>}
       className="w-full rounded-md border border-border"
+      style={{ cursor: 'crosshair' }}
+      {...canvasHandlers}
     />
   );
 }
