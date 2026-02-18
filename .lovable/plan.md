@@ -1,94 +1,58 @@
 
 
-# Audio Amplification with Preview
+# Audio-to-Video: Compress Audio, Quality Control, and Cancel Support
 
-## Overview
+## What Changes
 
-Add an optional gain/amplification control to audio processing tools. Users can adjust gain from -12 dB to +12 dB, preview the amplified audio in real-time (via Web Audio API), and have the gain baked into the final processed output (via FFmpeg `-af volume` filter).
+Three improvements to the Audio to Video tool (and the underlying FFmpeg infrastructure so cancel works everywhere):
 
-## Approach
-
-### 1. New reusable component: `GainControl`
-
-A compact UI block with:
-- A slider from -12 dB to +12 dB (default 0 = no change)
-- A "Preview" play/stop button that plays the audio with the selected gain applied in real-time using `useAudioPreview.playWithGain()`
-- dB readout label
-
-This component is self-contained and can be dropped into any tool page that accepts audio input.
-
-### 2. FFmpeg gain injection
-
-A small helper function `injectGainFilter(args, gainDb)` in `presets.ts` that:
-- If `gainDb === 0`, returns args unchanged
-- If args already contain `-af`, appends `,volume=XdB` to the existing filter
-- Otherwise inserts `-af volume=XdB` before the output filename
-
-This avoids modifying every individual preset function.
-
-### 3. Tool pages that get the GainControl
-
-Tools where amplification is useful (audio processing/conversion):
-
-| Tool | Why |
-|------|-----|
-| Audio Converter | Boost/cut during format conversion |
-| Audio Trimmer | Adjust volume of trimmed clip |
-| Sample Rate Converter | Adjust volume during resampling |
-| Channel Ops | Adjust volume during channel changes |
-| Metadata Stripper | Adjust volume while stripping |
-| Audio to Video | Boost audio in the output video |
-
-**Excluded**: Audio Normalizer (already has its own loudness targeting with preview), analysis-only tools (Spectrum, Spectrogram, LUFS Meter, etc.), video-only tools.
+1. **Audio quality selector** -- choose between High (192k AAC), Medium (128k), or Low (96k) to trade quality for speed
+2. **Speed optimizations** -- add `-preset ultrafast` and `-r 1` since the video is a still image
+3. **Cancel button** -- stop any in-progress FFmpeg conversion; works across all tools that use `useFFmpeg`
 
 ## File Changes
 
-### New file: `src/components/shared/GainControl.tsx`
+### 1. `src/engines/processing/ffmpeg-manager.ts`
 
-A compact component that accepts a `file: File`, `gainDb: number`, and `onGainChange: (db: number) => void`. Internally uses `useAudioPreview` to decode the file and provide a preview play button with the selected gain.
+- Add a `cancelProcessing()` export that calls `ffmpeg.terminate()` and resets the singleton instance (since terminate destroys the worker -- it must be reloaded next time)
+- Update `exec()` to accept an `AbortSignal` and forward it to `ffmpeg.exec(args, timeout, { signal })`
+
+### 2. `src/stores/ffmpeg-store.ts`
+
+- Add a `cancelled` state flag
+- Add `setCancelled()` action
+
+### 3. `src/hooks/use-ffmpeg.ts`
+
+- Add a `cancel()` function that calls `cancelProcessing()` from the manager, sets `processing: false` and `cancelled: true` in the store
+- Wire an `AbortController` into `process()` so the signal can be passed through
+- Return `cancel` and `cancelled` from the hook
+
+### 4. `src/engines/processing/presets.ts`
+
+- Update `audioToVideoArgs()` to accept an `audioBitrate` parameter (default `192`) and add `-preset ultrafast` and `-r 1`
+- The function signature becomes: `audioToVideoArgs(audioInput, imageInput, outputName, width, height, audioBitrate)`
+
+### 5. `src/pages/tools/AudioToVideo.tsx`
+
+- Add `audioQuality` state with three presets: High (192k), Medium (128k), Low (96k)
+- Add a Quality selector dropdown in the UI (between Resolution and the action buttons)
+- Pass the selected bitrate to `audioToVideoArgs()`
+- Show a "Cancel" button when processing is in progress
+- Handle the cancelled state (show a brief message instead of an error)
+
+## UI for Audio Quality
 
 ```text
-Layout:
-  Gain  [-12 ====|========= +12]  +3.0 dB   [Preview]
+Audio Quality
+[ High (192 kbps) v ]  -- dropdown with High / Medium / Low
 ```
 
-### Modified: `src/engines/processing/presets.ts`
+## UI for Cancel
 
-Add utility function:
+When processing is active, the "Generate Video" button changes to a red "Cancel" button. If cancelled, a neutral message is shown ("Conversion cancelled") instead of an error.
 
-```text
-injectGainFilter(args: string[], gainDb: number): string[]
-  - Returns args unchanged if gainDb is 0
-  - If args contain an existing -af flag, appends ",volume={gainDb}dB" to its value
-  - Otherwise inserts ["-af", "volume={gainDb}dB"] before the last arg (output filename)
-```
+## Scope
 
-### Modified tool pages (6 files)
-
-Each page gets:
-- `useState` for `gainDb` (default 0)
-- `<GainControl>` component rendered after the AudioPlayer
-- `injectGainFilter(args, gainDb)` wrapping the ffmpeg args before processing
-
-Pages:
-- `src/pages/tools/AudioConverter.tsx`
-- `src/pages/tools/AudioTrimmer.tsx`
-- `src/pages/tools/SampleRateConverter.tsx`
-- `src/pages/tools/ChannelOps.tsx`
-- `src/pages/tools/MetadataStripper.tsx`
-- `src/pages/tools/AudioToVideo.tsx`
-
-The pattern for each page is identical -- add ~5 lines of code:
-1. Import `GainControl` and `injectGainFilter`
-2. Add `const [gainDb, setGainDb] = useState(0);`
-3. Render `<GainControl file={file} gainDb={gainDb} onGainChange={setGainDb} />` after AudioPlayer
-4. Wrap ffmpeg args: `injectGainFilter(args, gainDb)`
-
-## Technical Notes
-
-- **Preview uses Web Audio API** (real-time, no processing delay) via `useAudioPreview.playWithGain()` which applies gain through a `GainNode`
-- **Output uses FFmpeg** `-af volume=XdB` filter which permanently bakes the gain into the file
-- **No new dependencies** required
-- The `injectGainFilter` helper is smart about merging with existing `-af` filters (e.g., Audio Trimmer or Channel Ops already use `-af` for some operations)
-- Batch mode: gain applies uniformly to all files in the batch (same setting for all)
-
+- Cancel support is added at the hook/manager level so it automatically works for every tool using `useFFmpeg`, but the Cancel button UI is only added to AudioToVideo for now (other tools can adopt it later)
+- Audio compression only applies to AudioToVideo since other tools have their own format/bitrate controls already
