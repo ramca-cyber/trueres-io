@@ -71,8 +71,8 @@ export function useFFmpeg() {
         store.setOutput(blob, outputName);
         return blob;
       } catch (e) {
-        // Don't show error if cancelled
-        if (store.cancelled) return null;
+        // Don't show error if cancelled — read directly from store to avoid stale closure
+        if (useFFmpegStore.getState().cancelled) return null;
         const msg = e instanceof Error ? e.message : 'Processing failed';
         store.setProcessError(msg);
         return null;
