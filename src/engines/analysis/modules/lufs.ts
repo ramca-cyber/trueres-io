@@ -110,7 +110,7 @@ export function measureLUFS(
     );
   }
 
-  // True Peak (oversampled peak detection, simplified 4x)
+  // Sample peak (per-sample max, not ITU-R BS.1770 true peak which requires 4x oversampling)
   let truePeak = 0;
   for (let ch = 0; ch < numChannels; ch++) {
     for (let i = 0; i < channelData[ch].length; i++) {

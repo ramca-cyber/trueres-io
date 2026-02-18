@@ -30,7 +30,7 @@ export function ComplianceBadge({ integratedLufs, truePeakDb }: ComplianceBadgeP
             <span>{p.pass ? '✓' : '✗'}</span>
           </div>
           <div className="text-[10px] opacity-70 mt-0.5">
-            Target: {p.target.lufs} LUFS / {p.target.truePeak} dBTP
+            Target: {p.target.lufs} LUFS / {p.target.truePeak} dBFS
           </div>
         </div>
       ))}
