@@ -25,6 +25,7 @@
   <url><loc>https://trueres.io/metadata-stripper</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://trueres.io/sample-rate-converter</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://trueres.io/channel-ops</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://trueres.io/audio-to-video</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <!-- Video Processing -->
   <url><loc>https://trueres.io/video-to-mp3</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://trueres.io/video-trimmer</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
