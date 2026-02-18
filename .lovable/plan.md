@@ -1,120 +1,46 @@
 
-# Persist State Across Refreshes
 
-## The Problem
+# Audit Fix: Sitemap Sync, True Peak Disclaimer, and Code Accuracy
 
-Refreshing the page loses the loaded file, all settings, and any completed output. Mid-conversion refreshes lose the conversion entirely.
+## Issues Addressed
 
-## What's Possible
+### 1. Sitemap missing `audio-to-video`
+The tool exists in the registry (route `/audio-to-video`) but has no entry in `public/sitemap.xml`.
 
-| What | Persistable? | How |
-|------|-------------|-----|
-| User settings (format, bitrate, resolution, gain, quality) | Yes | localStorage via zustand `persist` middleware |
-| Input file | Yes | IndexedDB (files can be stored as ArrayBuffers) |
-| Completed output blob | Yes | IndexedDB |
-| In-progress FFmpeg conversion | No | WebAssembly worker is killed on refresh -- impossible to resume |
+**Fix**: Add the missing URL entry to the sitemap.
 
-For active conversions, we **cannot** resume mid-process, but we **can** warn the user before they leave and auto-restart after refresh if desired.
+### 2. LUFS "True Peak" code/UI inconsistencies
+The LUFS Meter UI correctly labels it "Sample Peak" with subtext "(not true peak)" -- good. But there are two remaining inconsistencies:
 
-## Approach
+- **`lufs.ts` line 113**: Comment says "True Peak (oversampled peak detection, simplified 4x)" but the code just scans raw samples with no oversampling. Fix the misleading comment.
+- **`ComplianceBadge.tsx`**: Displays "dBTP" (decibels True Peak) next to the value, but this is sample peak, not true peak. Change label to "dBFS" and add a note.
 
-### 1. IndexedDB file cache utility
+### 3. Items NOT being changed (and why)
 
-A small helper module (`src/lib/file-cache.ts`) that wraps IndexedDB to store and retrieve Files:
-
-- `cacheFile(key, file)` -- stores file data + name + type
-- `getCachedFile(key)` -- returns a reconstructed File or null
-- `clearCachedFile(key)` -- removes entry
-- `cacheBlob(key, blob, fileName)` -- stores output blobs
-- `getCachedBlob(key)` -- returns blob + fileName or null
-
-Each tool gets its own key (e.g., `audio-converter-input`, `audio-to-video-input`).
-
-### 2. Persist tool settings via zustand
-
-Create a small persisted store (`src/stores/tool-settings-store.ts`) using zustand's built-in `persist` middleware with localStorage. This stores per-tool settings like:
-
-- Output format, bitrate, sample rate, channel mode
-- Resolution, audio quality (for Audio to Video)
-- Gain value
-
-Settings are keyed by tool ID so they don't collide.
-
-### 3. Integration into tool pages
-
-Each tool page gets:
-- On file load: cache the input file to IndexedDB
-- On mount: check IndexedDB for a cached file and restore it + settings
-- On output: cache the output blob to IndexedDB
-- On mount with cached output: show the download button immediately
-- On "Choose different file": clear the cache
-
-### 4. Warn before leaving during conversion
-
-Add a `beforeunload` event listener in `useFFmpeg` when `processing` is true. The browser will show its native "Are you sure you want to leave?" dialog, giving users a chance to stay.
-
-### 5. Auto-restart option (lightweight)
-
-If a refresh happens during processing, on remount detect that settings + input file exist but no output. Show a banner: "Your previous conversion was interrupted. [Restart] [Dismiss]". No automatic restart -- user clicks to resume.
+| Issue | Status | Reason |
+|-------|--------|--------|
+| FFT trig per-stage vs global cache | No change | Current per-stage tables are already fast; marginal gain not worth the complexity |
+| Bit depth on Float32 | No change | Web Audio API limitation; cannot be fixed without a custom decoder |
+| Domain not deployed | No change | Infrastructure task outside code scope |
+| No ad infrastructure | No change | Business decision, not a code fix |
 
 ## File Changes
 
-### New: `src/lib/file-cache.ts`
-
-IndexedDB wrapper (~60 lines):
-- Uses a single database `trueres-file-cache` with one object store
-- `cacheFile` / `getCachedFile` / `clearCachedFile` for input files
-- `cacheBlob` / `getCachedBlob` for output blobs
-- All operations are async with try/catch (gracefully degrades if IndexedDB unavailable)
-
-### New: `src/stores/tool-settings-store.ts`
-
-Zustand store with `persist` middleware:
-- `getSettings(toolId)` returns the saved settings object
-- `setSettings(toolId, settings)` merges and saves
-- `clearSettings(toolId)` removes
-- Persisted to localStorage under key `tool-settings`
-
-### Modified: `src/hooks/use-ffmpeg.ts`
-
-- Add `beforeunload` listener when `processing === true`
-- Remove listener when processing ends
-
-### Modified: Tool pages (7 files)
-
-Each tool page follows the same pattern:
-
-```
-// On mount: restore cached file + settings
-useEffect(() => {
-  getCachedFile('tool-id-input').then(f => { if (f) setFile(f); });
-  const saved = getSettings('tool-id');
-  if (saved) { setFormat(saved.format); setBitrate(saved.bitrate); ... }
-}, []);
-
-// On file select: cache it
-const handleFileSelect = (f) => { setFile(f); cacheFile('tool-id-input', f); };
-
-// On settings change: persist
-useEffect(() => { setSettings('tool-id', { format, bitrate, gain }); }, [format, bitrate, gain]);
-
-// On output: cache blob
-// On clear: clearCachedFile + clearSettings
+### `public/sitemap.xml`
+Add one entry after the existing Audio Processing section:
+```xml
+<url><loc>https://trueres.io/audio-to-video</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
 ```
 
-Pages updated:
-- `AudioConverter.tsx`
-- `AudioTrimmer.tsx`
-- `SampleRateConverter.tsx`
-- `ChannelOps.tsx`
-- `MetadataStripper.tsx`
-- `AudioToVideo.tsx`
-- `AudioNormalizer.tsx`
+### `src/engines/analysis/modules/lufs.ts`
+Fix the misleading comment at line 113:
+```typescript
+// Sample peak (per-sample max, not ITU-R BS.1770 true peak which requires 4x oversampling)
+```
 
-## What the User Experiences
+### `src/components/display/ComplianceBadge.tsx`
+Change the target display from "dBTP" to "dBFS" since we're measuring sample peak, not true peak:
+```
+Target: -14 LUFS / -1 dBFS
+```
 
-1. Load a file and pick settings -- everything is silently cached
-2. Refresh the page -- file and settings are restored instantly, ready to process again
-3. Complete a conversion -- output blob is cached, download button reappears after refresh
-4. Refresh during conversion -- browser warns "are you sure?"; if they proceed, on remount they see "Conversion interrupted" with a Restart button
-5. Click "Choose different file" -- cache is cleared cleanly
