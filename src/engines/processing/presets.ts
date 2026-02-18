@@ -177,15 +177,16 @@ export function audioToVideoArgs(
   imageInput: string | null,
   outputName: string,
   width: number,
-  height: number
+  height: number,
+  audioBitrate = 192
 ): string[] {
   if (imageInput) {
     return [
       '-loop', '1', '-i', imageInput,
       '-i', audioInput,
       '-vf', `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
-      '-c:v', 'libx264', '-tune', 'stillimage', '-pix_fmt', 'yuv420p',
-      '-c:a', 'aac', '-b:a', '192k',
+      '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'ultrafast', '-r', '1', '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', `${audioBitrate}k`,
       '-shortest',
       outputName,
     ];
@@ -194,8 +195,8 @@ export function audioToVideoArgs(
   return [
     '-f', 'lavfi', '-i', `color=c=black:s=${width}x${height}:r=1`,
     '-i', audioInput,
-    '-c:v', 'libx264', '-tune', 'stillimage', '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac', '-b:a', '192k',
+    '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'ultrafast', '-r', '1', '-pix_fmt', 'yuv420p',
+    '-c:a', 'aac', '-b:a', `${audioBitrate}k`,
     '-shortest',
     outputName,
   ];

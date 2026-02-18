@@ -110,6 +110,22 @@ export async function readOutputFile(name: string): Promise<Uint8Array> {
 }
 
 /**
+ * Cancel any in-progress FFmpeg operation by terminating the worker.
+ * The instance must be re-loaded before next use.
+ */
+export function cancelProcessing(): void {
+  if (ffmpegInstance) {
+    try {
+      ffmpegInstance.terminate();
+    } catch {
+      // Ignore errors during termination
+    }
+    ffmpegInstance = null;
+    loadPromise = null;
+  }
+}
+
+/**
  * Execute an FFmpeg command
  */
 export async function exec(args: string[], onProgress?: FFmpegProgressCallback): Promise<void> {
