@@ -50,17 +50,8 @@ const AudioConverter = () => {
   const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const batch = useBatchProcess();
 
-  // Restore cached output on mount
-  useEffect(() => {
-    if (!outputBlob) {
-      getCachedBlob(`${TOOL_ID}-output`).then(cached => {
-        if (cached && file) {
-          // We can't set outputBlob directly in the store, but we re-trigger isn't ideal.
-          // Instead, store the blob locally.
-        }
-      });
-    }
-  }, []);
+
+
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); clearCachedFile(`${TOOL_ID}-output`); };
   const handleMultipleFiles = (files: File[]) => {
