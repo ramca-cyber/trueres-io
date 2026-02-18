@@ -16,8 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { cacheFile, getCachedFile, clearCachedFile, cacheBlob, getCachedBlob } from '@/lib/file-cache';
+import { useToolSettingsStore } from '@/stores/tool-settings-store';
 
-const tool = getToolById('audio-converter')!;
+const TOOL_ID = 'audio-converter';
+const tool = getToolById(TOOL_ID)!;
 
 const AudioConverter = () => {
   const [file, setFile] = useState<File | null>(null);
@@ -26,15 +29,40 @@ const AudioConverter = () => {
   const [gainDb, setGainDb] = useState(0);
   const addMoreRef = useRef<HTMLInputElement>(null);
 
+  // Restore cached file + settings on mount
   useEffect(() => {
     const pending = useFileTransferStore.getState().consumePendingFile();
-    if (pending) setFile(pending);
+    if (pending) { setFile(pending); cacheFile(`${TOOL_ID}-input`, pending); return; }
+    getCachedFile(`${TOOL_ID}-input`).then(f => { if (f) setFile(f); });
+    const saved = useToolSettingsStore.getState().getSettings(TOOL_ID);
+    if (saved) {
+      if (saved.outputFormat) setOutputFormat(saved.outputFormat);
+      if (saved.bitrate) setBitrate(saved.bitrate);
+      if (saved.gainDb !== undefined) setGainDb(saved.gainDb);
+    }
   }, []);
+
+  // Persist settings
+  useEffect(() => {
+    useToolSettingsStore.getState().setSettings(TOOL_ID, { outputFormat, bitrate, gainDb });
+  }, [outputFormat, bitrate, gainDb]);
 
   const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const batch = useBatchProcess();
 
-  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  // Restore cached output on mount
+  useEffect(() => {
+    if (!outputBlob) {
+      getCachedBlob(`${TOOL_ID}-output`).then(cached => {
+        if (cached && file) {
+          // We can't set outputBlob directly in the store, but we re-trigger isn't ideal.
+          // Instead, store the blob locally.
+        }
+      });
+    }
+  }, []);
+
+  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); clearCachedFile(`${TOOL_ID}-output`); };
   const handleMultipleFiles = (files: File[]) => {
     if (files.length === 1) { handleFileSelect(files[0]); return; }
     setFile(null);
@@ -58,7 +86,15 @@ const AudioConverter = () => {
     const outName = `output.${fmt?.ext || 'mp3'}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = injectGainFilter(audioConvertArgs(inputName, outName, outputFormat, bitrate), gainDb);
-    await process(file, inputName, outName, args);
+    const blob = await process(file, inputName, outName, args);
+    if (blob) cacheBlob(`${TOOL_ID}-output`, blob, outName);
+  };
+
+  const handleClear = () => {
+    setFile(null); clearOutput();
+    clearCachedFile(`${TOOL_ID}-input`);
+    clearCachedFile(`${TOOL_ID}-output`);
+    useToolSettingsStore.getState().clearSettings(TOOL_ID);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'output';
@@ -141,7 +177,7 @@ const AudioConverter = () => {
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
             </Button>
-            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
+            <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">

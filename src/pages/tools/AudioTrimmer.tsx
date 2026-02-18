@@ -16,21 +16,35 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2, Play, Square } from 'lucide-react';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { cacheFile, getCachedFile, clearCachedFile, cacheBlob } from '@/lib/file-cache';
+import { useToolSettingsStore } from '@/stores/tool-settings-store';
 
-const tool = getToolById('audio-trimmer')!;
+const TOOL_ID = 'audio-trimmer';
+const tool = getToolById(TOOL_ID)!;
 
 const AudioTrimmer = () => {
   const [file, setFile] = useState<File | null>(null);
-
-  useEffect(() => {
-    const pending = useFileTransferStore.getState().consumePendingFile();
-    if (pending) setFile(pending);
-  }, []);
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(30);
   const [gainDb, setGainDb] = useState(0);
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, duration, isPlaying, currentTime, decoding, playRegion, stop, seekTo } = useAudioPreview(file);
+
+  // Restore cached file + settings on mount
+  useEffect(() => {
+    const pending = useFileTransferStore.getState().consumePendingFile();
+    if (pending) { setFile(pending); cacheFile(`${TOOL_ID}-input`, pending); return; }
+    getCachedFile(`${TOOL_ID}-input`).then(f => { if (f) setFile(f); });
+    const saved = useToolSettingsStore.getState().getSettings(TOOL_ID);
+    if (saved) {
+      if (saved.gainDb !== undefined) setGainDb(saved.gainDb);
+    }
+  }, []);
+
+  // Persist settings
+  useEffect(() => {
+    useToolSettingsStore.getState().setSettings(TOOL_ID, { gainDb });
+  }, [gainDb]);
 
   // Auto-set end time to file duration when decoded
   useEffect(() => {
@@ -39,7 +53,7 @@ const AudioTrimmer = () => {
     }
   }, [duration]);
 
-  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); };
 
   const handleTrim = async () => {
     if (!file) return;
@@ -47,12 +61,20 @@ const AudioTrimmer = () => {
     const outName = `trimmed.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = injectGainFilter(trimArgs(inputName, outName, startTime, endTime), gainDb);
-    await process(file, inputName, outName, args);
+    const blob = await process(file, inputName, outName, args);
+    if (blob) cacheBlob(`${TOOL_ID}-output`, blob, outName);
   };
 
   const handlePreview = () => {
     if (isPlaying) { stop(); return; }
     playRegion(startTime, endTime);
+  };
+
+  const handleClear = () => {
+    setFile(null); clearOutput(); stop();
+    clearCachedFile(`${TOOL_ID}-input`);
+    clearCachedFile(`${TOOL_ID}-output`);
+    useToolSettingsStore.getState().clearSettings(TOOL_ID);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'trimmed';
@@ -138,7 +160,7 @@ const AudioTrimmer = () => {
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim'}
             </Button>
-            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); stop(); }}>Choose different file</Button>
+            <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>
 
           {outputBlob && (

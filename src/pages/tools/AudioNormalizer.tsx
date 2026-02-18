@@ -16,8 +16,11 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Play, Square, Volume2 } from 'lucide-react';
 import { useFileTransferStore } from '@/stores/file-transfer-store';
+import { cacheFile, getCachedFile, clearCachedFile, cacheBlob } from '@/lib/file-cache';
+import { useToolSettingsStore } from '@/stores/tool-settings-store';
 
-const tool = getToolById('audio-normalizer')!;
+const TOOL_ID = 'audio-normalizer';
+const tool = getToolById(TOOL_ID)!;
 
 const TARGETS = [
   { value: '-14', label: '-14 LUFS (Spotify, YouTube)', gain: 0 },
@@ -34,14 +37,23 @@ const AudioNormalizer = () => {
 
   useEffect(() => {
     const pending = useFileTransferStore.getState().consumePendingFile();
-    if (pending) setFile(pending);
+    if (pending) { setFile(pending); cacheFile(`${TOOL_ID}-input`, pending); return; }
+    getCachedFile(`${TOOL_ID}-input`).then(f => { if (f) setFile(f); });
+    const saved = useToolSettingsStore.getState().getSettings(TOOL_ID);
+    if (saved) {
+      if (saved.targetLUFS) setTargetLUFS(saved.targetLUFS);
+    }
   }, []);
+
+  useEffect(() => {
+    useToolSettingsStore.getState().setSettings(TOOL_ID, { targetLUFS });
+  }, [targetLUFS]);
 
   const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playWithGain, playRegion, stop, duration } = useAudioPreview(file);
   const batch = useBatchProcess();
 
-  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
+  const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); };
   const handleMultipleFiles = (files: File[]) => {
     if (files.length === 1) { handleFileSelect(files[0]); return; }
     setFile(null);
@@ -64,7 +76,8 @@ const AudioNormalizer = () => {
     const outName = `normalized.${ext}`;
     const inputName = `input_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const args = normalizeArgs(inputName, outName, parseFloat(targetLUFS));
-    await process(file, inputName, outName, args);
+    const blob = await process(file, inputName, outName, args);
+    if (blob) cacheBlob(`${TOOL_ID}-output`, blob, outName);
   };
 
   const handlePreview = (mode: 'original' | 'normalized') => {
@@ -76,6 +89,13 @@ const AudioNormalizer = () => {
       const target = TARGETS.find(t => t.value === targetLUFS);
       playWithGain(target?.gain ?? 0);
     }
+  };
+
+  const handleClear = () => {
+    setFile(null); clearOutput(); stop();
+    clearCachedFile(`${TOOL_ID}-input`);
+    clearCachedFile(`${TOOL_ID}-output`);
+    useToolSettingsStore.getState().clearSettings(TOOL_ID);
   };
 
   const baseName = file?.name.replace(/\.[^.]+$/, '') || 'normalized';
@@ -149,7 +169,7 @@ const AudioNormalizer = () => {
               {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {loading ? 'Loading engine...' : processing ? 'Normalizing...' : 'Normalize'}
             </Button>
-            <Button variant="outline" onClick={() => { setFile(null); clearOutput(); stop(); }}>Choose different file</Button>
+            <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">

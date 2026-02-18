@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { ToolPage } from '@/components/shared/ToolPage';
 import { FileDropZone } from '@/components/shared/FileDropZone';
 import { FileInfoBar } from '@/components/shared/FileInfoBar';
@@ -14,8 +14,11 @@ import { writeInputFile } from '@/engines/processing/ffmpeg-manager';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, X } from 'lucide-react';
+import { cacheFile, getCachedFile, clearCachedFile, cacheBlob } from '@/lib/file-cache';
+import { useToolSettingsStore } from '@/stores/tool-settings-store';
 
-const tool = getToolById('audio-to-video')!;
+const TOOL_ID = 'audio-to-video';
+const tool = getToolById(TOOL_ID)!;
 
 const RESOLUTION_PRESETS = [
   { label: '1080p (16:9)', width: 1920, height: 1080 },
@@ -38,23 +41,45 @@ const AudioToVideo = () => {
   const [audioQuality, setAudioQuality] = useState('192');
   const [gainDb, setGainDb] = useState(0);
 
+  // Restore cached files + settings on mount
+  useEffect(() => {
+    getCachedFile(`${TOOL_ID}-audio`).then(f => { if (f) setAudioFile(f); });
+    getCachedFile(`${TOOL_ID}-image`).then(f => {
+      if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); }
+    });
+    const saved = useToolSettingsStore.getState().getSettings(TOOL_ID);
+    if (saved) {
+      if (saved.resolution) setResolution(saved.resolution);
+      if (saved.audioQuality) setAudioQuality(saved.audioQuality);
+      if (saved.gainDb !== undefined) setGainDb(saved.gainDb);
+    }
+  }, []);
+
+  // Persist settings
+  useEffect(() => {
+    useToolSettingsStore.getState().setSettings(TOOL_ID, { resolution, audioQuality, gainDb });
+  }, [resolution, audioQuality, gainDb]);
+
   const { process, processing, progress, outputBlob, loading, loadError, processError, cancelled, cancel, clearOutput, reset } = useFFmpeg();
 
   const handleAudioSelect = (f: File) => {
     setAudioFile(f);
     clearOutput();
+    cacheFile(`${TOOL_ID}-audio`, f);
   };
 
   const handleImageSelect = (f: File) => {
     setImageFile(f);
     const url = URL.createObjectURL(f);
     setImagePreview(url);
+    cacheFile(`${TOOL_ID}-image`, f);
   };
 
   const clearImage = () => {
     if (imagePreview) URL.revokeObjectURL(imagePreview);
     setImageFile(null);
     setImagePreview(null);
+    clearCachedFile(`${TOOL_ID}-image`);
   };
 
   const handleGenerate = useCallback(async () => {
@@ -73,8 +98,18 @@ const AudioToVideo = () => {
       audioToVideoArgs(audioInputName, imageInputName, outputName, w, h, Number(audioQuality)),
       gainDb
     );
-    await process(audioFile, audioInputName, outputName, args);
+    const blob = await process(audioFile, audioInputName, outputName, args);
+    if (blob) cacheBlob(`${TOOL_ID}-output`, blob, outputName);
   }, [audioFile, imageFile, resolution, audioQuality, gainDb, process]);
+
+  const handleClear = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setAudioFile(null); setImageFile(null); setImagePreview(null); clearOutput();
+    clearCachedFile(`${TOOL_ID}-audio`);
+    clearCachedFile(`${TOOL_ID}-image`);
+    clearCachedFile(`${TOOL_ID}-output`);
+    useToolSettingsStore.getState().clearSettings(TOOL_ID);
+  };
 
   const preset = RESOLUTION_PRESETS.find(p => `${p.width}x${p.height}` === resolution)!;
   const baseName = audioFile?.name.replace(/\.[^.]+$/, '') || 'video';
@@ -100,11 +135,7 @@ const AudioToVideo = () => {
             {imageFile ? (
               <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
                 {imagePreview && (
-                  <img
-                    src={imagePreview}
-                    alt="Background preview"
-                    className="h-16 w-16 rounded object-cover"
-                  />
+                  <img src={imagePreview} alt="Background preview" className="h-16 w-16 rounded object-cover" />
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{imageFile.name}</p>
@@ -115,12 +146,7 @@ const AudioToVideo = () => {
                 </Button>
               </div>
             ) : (
-              <FileDropZone
-                accept={IMAGE_ACCEPT}
-                onFileSelect={handleImageSelect}
-                label="Drop a background image"
-                sublabel="PNG, JPG, JPEG, WebP — will be scaled/cropped to fit"
-              />
+              <FileDropZone accept={IMAGE_ACCEPT} onFileSelect={handleImageSelect} label="Drop a background image" sublabel="PNG, JPG, JPEG, WebP — will be scaled/cropped to fit" />
             )}
             {!imageFile && (
               <p className="text-xs text-muted-foreground">No image? A solid black frame will be used.</p>
@@ -178,7 +204,7 @@ const AudioToVideo = () => {
                 {loading ? 'Loading engine...' : 'Generate Video'}
               </Button>
             )}
-            <Button variant="outline" onClick={() => { setAudioFile(null); clearImage(); clearOutput(); }}>
+            <Button variant="outline" onClick={handleClear}>
               Choose different file
             </Button>
           </div>

@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useFFmpegStore } from '@/stores/ffmpeg-store';
 import { getFFmpeg, processFile, isFFmpegLoaded, cancelProcessing } from '@/engines/processing/ffmpeg-manager';
 
@@ -7,6 +7,14 @@ import { getFFmpeg, processFile, isFFmpegLoaded, cancelProcessing } from '@/engi
  */
 export function useFFmpeg() {
   const store = useFFmpegStore();
+
+  // Warn before leaving during active conversion
+  useEffect(() => {
+    if (!store.processing) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [store.processing]);
 
   const load = useCallback(async () => {
     if (isFFmpegLoaded()) {
