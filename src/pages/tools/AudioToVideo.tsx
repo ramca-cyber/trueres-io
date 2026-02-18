@@ -10,11 +10,10 @@ import { AUDIO_ACCEPT, IMAGE_ACCEPT, formatFileSize } from '@/config/constants';
 import { useFFmpeg } from '@/hooks/use-ffmpeg';
 import { audioToVideoArgs, injectGainFilter } from '@/engines/processing/presets';
 import { GainControl } from '@/components/shared/GainControl';
-import { useAudioPreview } from '@/hooks/use-audio-preview';
 import { writeInputFile } from '@/engines/processing/ffmpeg-manager';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ImagePlus, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 
 const tool = getToolById('audio-to-video')!;
 
@@ -25,14 +24,21 @@ const RESOLUTION_PRESETS = [
   { label: 'Vertical (9:16)', width: 1080, height: 1920 },
 ] as const;
 
+const QUALITY_PRESETS = [
+  { value: '192', label: 'High (192 kbps)' },
+  { value: '128', label: 'Medium (128 kbps)' },
+  { value: '96', label: 'Low (96 kbps)' },
+] as const;
+
 const AudioToVideo = () => {
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [resolution, setResolution] = useState('1920x1080');
+  const [audioQuality, setAudioQuality] = useState('192');
   const [gainDb, setGainDb] = useState(0);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, cancelled, cancel, clearOutput, reset } = useFFmpeg();
 
   const handleAudioSelect = (f: File) => {
     setAudioFile(f);
@@ -59,14 +65,16 @@ const AudioToVideo = () => {
     const imageInputName = imageFile ? `input_image.${imageFile.name.split('.').pop()}` : null;
     const outputName = 'output.mp4';
 
-    // If there's an image, write it to the VFS first
     if (imageFile && imageInputName) {
       await writeInputFile(imageInputName, imageFile);
     }
 
-    const args = injectGainFilter(audioToVideoArgs(audioInputName, imageInputName, outputName, w, h), gainDb);
+    const args = injectGainFilter(
+      audioToVideoArgs(audioInputName, imageInputName, outputName, w, h, Number(audioQuality)),
+      gainDb
+    );
     await process(audioFile, audioInputName, outputName, args);
-  }, [audioFile, imageFile, resolution, process]);
+  }, [audioFile, imageFile, resolution, audioQuality, gainDb, process]);
 
   const preset = RESOLUTION_PRESETS.find(p => `${p.width}x${p.height}` === resolution)!;
   const baseName = audioFile?.name.replace(/\.[^.]+$/, '') || 'video';
@@ -134,9 +142,25 @@ const AudioToVideo = () => {
             </Select>
           </div>
 
+          {/* Audio Quality */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Audio Quality</label>
+            <Select value={audioQuality} onValueChange={setAudioQuality}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {QUALITY_PRESETS.map((q) => (
+                  <SelectItem key={q.value} value={q.value}>{q.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           {/* Progress / errors */}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Generating video..." sublabel={`${progress}%`} />}
+          {cancelled && !processing && !processError && (
+            <p className="text-sm text-muted-foreground">Conversion cancelled.</p>
+          )}
           {(processError || loadError) && (
             <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 space-y-2">
               <p className="text-sm text-destructive">{processError || loadError}</p>
@@ -146,10 +170,14 @@ const AudioToVideo = () => {
 
           {/* Actions */}
           <div className="flex gap-3">
-            <Button onClick={handleGenerate} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Generating...' : 'Generate Video'}
-            </Button>
+            {processing ? (
+              <Button variant="destructive" onClick={cancel}>Cancel</Button>
+            ) : (
+              <Button onClick={handleGenerate} disabled={loading}>
+                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {loading ? 'Loading engine...' : 'Generate Video'}
+              </Button>
+            )}
             <Button variant="outline" onClick={() => { setAudioFile(null); clearImage(); clearOutput(); }}>
               Choose different file
             </Button>

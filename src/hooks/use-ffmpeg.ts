@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useFFmpegStore } from '@/stores/ffmpeg-store';
-import { getFFmpeg, processFile, isFFmpegLoaded } from '@/engines/processing/ffmpeg-manager';
+import { getFFmpeg, processFile, isFFmpegLoaded, cancelProcessing } from '@/engines/processing/ffmpeg-manager';
 
 /**
  * Hook for ffmpeg.wasm processing operations
@@ -23,6 +23,11 @@ export function useFFmpeg() {
     }
   }, [store]);
 
+  const cancel = useCallback(() => {
+    cancelProcessing();
+    store.setCancelled(true);
+  }, [store]);
+
   const process = useCallback(
     async (
       inputFile: File,
@@ -30,7 +35,6 @@ export function useFFmpeg() {
       outputName: string,
       args: string[],
     ): Promise<Blob | null> => {
-      // Prevent concurrent processing
       if (store.processing) {
         store.setProcessError('Another processing task is already running');
         return null;
@@ -59,6 +63,8 @@ export function useFFmpeg() {
         store.setOutput(blob, outputName);
         return blob;
       } catch (e) {
+        // Don't show error if cancelled
+        if (store.cancelled) return null;
         const msg = e instanceof Error ? e.message : 'Processing failed';
         store.setProcessError(msg);
         return null;
@@ -70,12 +76,14 @@ export function useFFmpeg() {
   return {
     load,
     process,
+    cancel,
     loaded: store.loaded,
     loading: store.loading,
     loadError: store.loadError,
     processing: store.processing,
     progress: store.progress,
     processError: store.processError,
+    cancelled: store.cancelled,
     outputBlob: store.outputBlob,
     outputFileName: store.outputFileName,
     clearOutput: store.clearOutput,

@@ -7,6 +7,7 @@ interface FFmpegState {
   processing: boolean;
   progress: number;
   processError: string | null;
+  cancelled: boolean;
   outputBlob: Blob | null;
   outputFileName: string;
 
@@ -16,6 +17,7 @@ interface FFmpegState {
   setProcessing: (processing: boolean) => void;
   setProgress: (progress: number) => void;
   setProcessError: (error: string | null) => void;
+  setCancelled: (cancelled: boolean) => void;
   setOutput: (blob: Blob, fileName: string) => void;
   clearOutput: () => void;
   reset: () => void;
@@ -28,6 +30,7 @@ const initialState = {
   processing: false,
   progress: 0,
   processError: null,
+  cancelled: false,
   outputBlob: null,
   outputFileName: '',
 };
@@ -38,9 +41,10 @@ export const useFFmpegStore = create<FFmpegState>((set) => ({
   setLoaded: (loaded) => set({ loaded, loading: false }),
   setLoading: (loading) => set({ loading }),
   setLoadError: (error) => set({ loadError: error, loading: false }),
-  setProcessing: (processing) => set({ processing, progress: 0, processError: null }),
+  setProcessing: (processing) => set({ processing, progress: 0, processError: null, cancelled: false }),
   setProgress: (progress) => set({ progress }),
   setProcessError: (error) => set({ processError: error, processing: false }),
+  setCancelled: (cancelled) => set({ cancelled, processing: false }),
   setOutput: (blob, fileName) => set({ outputBlob: blob, outputFileName: fileName, processing: false, progress: 100 }),
   clearOutput: () => set({ outputBlob: null, outputFileName: '', progress: 0, processError: null }),
   reset: () => set(initialState),
