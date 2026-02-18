@@ -3,6 +3,7 @@ import { Header } from './Header';
 import { Footer } from './Footer';
 import { ToolNav } from './ToolNav';
 import { BrowserCompatBanner } from '@/components/shared/BrowserCompatBanner';
+import { ProcessingBanner } from '@/components/shared/ProcessingBanner';
 import { MiniPlayer } from '@/components/shared/MiniPlayer';
 
 interface AppShellProps {
@@ -20,6 +21,7 @@ export function AppShell({ children }: AppShellProps) {
         Skip to content
       </a>
 
+      <ProcessingBanner />
       <BrowserCompatBanner />
       <Header />
       <div className="flex flex-1">
