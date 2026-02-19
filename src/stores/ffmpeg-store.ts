@@ -4,6 +4,7 @@ interface FFmpegState {
   loaded: boolean;
   loading: boolean;
   loadError: string | null;
+  preparing: boolean;
   processing: boolean;
   progress: number;
   processError: string | null;
@@ -14,6 +15,7 @@ interface FFmpegState {
   setLoaded: (loaded: boolean) => void;
   setLoading: (loading: boolean) => void;
   setLoadError: (error: string | null) => void;
+  setPreparing: (preparing: boolean) => void;
   setProcessing: (processing: boolean) => void;
   setProgress: (progress: number) => void;
   setProcessError: (error: string | null) => void;
@@ -27,6 +29,7 @@ const initialState = {
   loaded: false,
   loading: false,
   loadError: null,
+  preparing: false,
   processing: false,
   progress: 0,
   processError: null,
@@ -40,8 +43,9 @@ export const useFFmpegStore = create<FFmpegState>((set) => ({
 
   setLoaded: (loaded) => set({ loaded, loading: false }),
   setLoading: (loading) => set({ loading }),
-  setLoadError: (error) => set({ loadError: error, loading: false }),
-  setProcessing: (processing) => set({ processing, progress: 0, processError: null, cancelled: false }),
+  setLoadError: (error) => set({ loadError: error, loading: false, preparing: false }),
+  setPreparing: (preparing) => set({ preparing }),
+  setProcessing: (processing) => set({ processing, preparing: false, progress: 0, processError: null, cancelled: false }),
   setProgress: (progress) => set({ progress }),
   setProcessError: (error) => set({ processError: error, processing: false }),
   setCancelled: (cancelled) => set({ cancelled, processing: false }),

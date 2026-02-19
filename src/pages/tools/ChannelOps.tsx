@@ -53,7 +53,7 @@ const ChannelOps = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { op, gainDb });
   }, [op, gainDb]);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playChannel, stop } = useAudioPreview(file);
   const batch = useBatchProcess();
 
@@ -144,6 +144,7 @@ const ChannelOps = () => {
           <AudioPlayer src={file!} label="Input" />
           {settingsPanel}
           <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up processing" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Processing..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -160,9 +161,9 @@ const ChannelOps = () => {
               </Button>
             )}
             {decoding && <span className="text-xs text-muted-foreground flex items-center"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Decoding...</span>}
-            <Button onClick={handleProcess} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Processing...' : 'Process'}
+            <Button onClick={handleProcess} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Processing...' : 'Process'}
             </Button>
             <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>

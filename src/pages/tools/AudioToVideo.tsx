@@ -60,7 +60,7 @@ const AudioToVideo = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { resolution, audioQuality, gainDb });
   }, [resolution, audioQuality, gainDb]);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, cancelled, cancel, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, cancelled, cancel, clearOutput, reset, preparing } = useFFmpeg();
 
   const handleAudioSelect = (f: File) => {
     setAudioFile(f);
@@ -182,6 +182,7 @@ const AudioToVideo = () => {
           </div>
 
           {/* Progress / errors */}
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing files..." sublabel="Setting up conversion" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Generating video..." sublabel={`${progress}%`} />}
           {cancelled && !processing && !processError && (
@@ -199,9 +200,9 @@ const AudioToVideo = () => {
             {processing ? (
               <Button variant="destructive" onClick={cancel}>Cancel</Button>
             ) : (
-              <Button onClick={handleGenerate} disabled={loading}>
-                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {loading ? 'Loading engine...' : 'Generate Video'}
+              <Button onClick={handleGenerate} disabled={loading || preparing}>
+                {(loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {preparing ? 'Preparing...' : loading ? 'Loading engine...' : 'Generate Video'}
               </Button>
             )}
             <Button variant="outline" onClick={handleClear}>

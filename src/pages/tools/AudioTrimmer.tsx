@@ -27,7 +27,7 @@ const AudioTrimmer = () => {
   const [startTime, setStartTime] = useState(0);
   const [endTime, setEndTime] = useState(30);
   const [gainDb, setGainDb] = useState(0);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const { audioBuffer, duration, isPlaying, currentTime, decoding, playRegion, stop, seekTo } = useAudioPreview(file);
 
   // Restore cached file + settings on mount
@@ -136,6 +136,7 @@ const AudioTrimmer = () => {
 
           {!audioBuffer && !decoding && <AudioPlayer src={file} label="Input" />}
 
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up trim" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Trimming..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -156,9 +157,9 @@ const AudioTrimmer = () => {
                 {isPlaying ? 'Stop' : 'Preview Selection'}
               </Button>
             )}
-            <Button onClick={handleTrim} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim'}
+            <Button onClick={handleTrim} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim'}
             </Button>
             <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>

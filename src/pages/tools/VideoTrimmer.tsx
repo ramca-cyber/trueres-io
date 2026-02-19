@@ -26,7 +26,7 @@ const VideoTrimmer = () => {
   const [startTime, setStartTime] = useState('0');
   const [endTime, setEndTime] = useState('30');
   const videoRef = useRef<HTMLVideoElement>(null);
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
 
@@ -77,6 +77,7 @@ const VideoTrimmer = () => {
               </div>
             </div>
           </div>
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up trim" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Trimming video..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -90,9 +91,9 @@ const VideoTrimmer = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleTrim} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim Video'}
+            <Button onClick={handleTrim} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Trimming...' : 'Trim Video'}
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
           </div>

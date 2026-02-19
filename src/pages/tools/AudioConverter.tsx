@@ -47,7 +47,7 @@ const AudioConverter = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { outputFormat, bitrate, gainDb });
   }, [outputFormat, bitrate, gainDb]);
 
-  const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
 
 
@@ -155,6 +155,7 @@ const AudioConverter = () => {
           <AudioPlayer src={file!} label="Input" />
           {settingsPanel}
           <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up conversion" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Converting..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -164,9 +165,9 @@ const AudioConverter = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleConvert} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
+            <Button onClick={handleConvert} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
             </Button>
             <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>
