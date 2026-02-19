@@ -49,7 +49,7 @@ const AudioNormalizer = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { targetLUFS });
   }, [targetLUFS]);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const { audioBuffer, isPlaying, decoding, playWithGain, playRegion, stop, duration } = useAudioPreview(file);
   const batch = useBatchProcess();
 
@@ -156,6 +156,7 @@ const AudioNormalizer = () => {
               {decoding && <span className="text-xs text-muted-foreground flex items-center"><Loader2 className="h-3 w-3 mr-1 animate-spin" />Decoding...</span>}
             </div>
           )}
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up normalization" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Normalizing..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -165,9 +166,9 @@ const AudioNormalizer = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleNormalize} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Normalizing...' : 'Normalize'}
+            <Button onClick={handleNormalize} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Normalizing...' : 'Normalize'}
             </Button>
             <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>

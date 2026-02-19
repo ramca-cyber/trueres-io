@@ -27,7 +27,7 @@ const VideoToAudio = () => {
     if (pending) setFile(pending);
   }, []);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -98,6 +98,7 @@ const VideoToAudio = () => {
               Audio will be extracted in its original codec — no re-encoding, no quality loss. This is the fastest and most faithful extraction method.
             </p>
           </div>
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up extraction" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Extracting audio..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -107,9 +108,9 @@ const VideoToAudio = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleExtract} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Extracting...' : 'Extract Audio'}
+            <Button onClick={handleExtract} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Extracting...' : 'Extract Audio'}
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
           </div>

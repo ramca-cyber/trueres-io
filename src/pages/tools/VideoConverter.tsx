@@ -28,7 +28,7 @@ const VideoConverter = () => {
     if (pending) setFile(pending);
   }, []);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -103,6 +103,7 @@ const VideoConverter = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <VideoPlayer src={file!} label="Input video" />
           {settingsPanel}
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up conversion" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Converting video..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -112,9 +113,9 @@ const VideoConverter = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleConvert} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
+            <Button onClick={handleConvert} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
           </div>

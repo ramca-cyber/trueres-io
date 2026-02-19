@@ -40,7 +40,7 @@ const MetadataStripper = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { gainDb });
   }, [gainDb]);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); };
@@ -122,6 +122,7 @@ const MetadataStripper = () => {
           <AudioPlayer src={file!} label="Input" />
           {infoPanel}
           <GainControl file={file!} gainDb={gainDb} onGainChange={setGainDb} />
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up processing" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Stripping metadata..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -131,9 +132,9 @@ const MetadataStripper = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleStrip} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Stripping...' : 'Strip All Metadata'}
+            <Button onClick={handleStrip} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Stripping...' : 'Strip All Metadata'}
             </Button>
             <Button variant="outline" onClick={handleClear}>Choose different file</Button>
           </div>

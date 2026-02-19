@@ -29,7 +29,7 @@ const VideoToMp3 = () => {
     if (pending) setFile(pending);
   }, []);
 
-  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); };
@@ -100,6 +100,7 @@ const VideoToMp3 = () => {
           <FileInfoBar fileName={file!.name} fileSize={file!.size} />
           <VideoPlayer src={file!} label="Input video" />
           {settingsPanel}
+          {preparing && !loading && !processing && <ProgressBar value={-1} label="Preparing..." sublabel="Setting up extraction" />}
           {loading && <ProgressBar value={-1} label="Loading processing engine..." sublabel="Downloading ~30 MB (first time only)" />}
           {processing && <ProgressBar value={progress} label="Extracting audio..." sublabel={`${progress}%`} />}
           {(processError || loadError) && (
@@ -109,9 +110,9 @@ const VideoToMp3 = () => {
             </div>
           )}
           <div className="flex gap-3">
-            <Button onClick={handleExtract} disabled={processing || loading}>
-              {(processing || loading) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              {loading ? 'Loading engine...' : processing ? 'Extracting...' : 'Extract MP3'}
+            <Button onClick={handleExtract} disabled={processing || loading || preparing}>
+              {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Extracting...' : 'Extract MP3'}
             </Button>
             <Button variant="outline" onClick={() => { setFile(null); clearOutput(); }}>Choose different file</Button>
           </div>

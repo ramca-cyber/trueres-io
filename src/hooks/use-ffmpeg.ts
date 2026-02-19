@@ -49,6 +49,8 @@ export function useFFmpeg() {
         return null;
       }
 
+      store.setPreparing(true);
+
       // Auto-load if needed
       if (!isFFmpegLoaded()) {
         store.setLoading(true);
@@ -102,6 +104,7 @@ export function useFFmpeg() {
     loaded: store.loaded,
     loading: store.loading,
     loadError: store.loadError,
+    preparing: store.preparing,
     processing: store.processing,
     progress: store.progress,
     processError: store.processError,
