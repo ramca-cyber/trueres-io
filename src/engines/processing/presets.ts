@@ -182,7 +182,7 @@ export function audioToVideoArgs(
 ): string[] {
   if (imageInput) {
     return [
-      '-loop', '1', '-i', imageInput,
+      '-loop', '1', '-framerate', '1', '-i', imageInput,
       '-i', audioInput,
       '-vf', `scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}`,
       '-c:v', 'libx264', '-tune', 'stillimage', '-preset', 'ultrafast', '-r', '1', '-pix_fmt', 'yuv420p',
