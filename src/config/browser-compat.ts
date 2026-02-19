@@ -94,5 +94,5 @@ export function getBrowserName(): string {
   return 'Unknown';
 }
 
-export const FILE_SIZE_WARN_MB = 200;
-export const FILE_SIZE_LIMIT_MOBILE_MB = 500;
+// File size constants moved to src/config/constants.ts
+// Use FILE_SIZE_WARN_BYTES, FILE_SIZE_LIMIT_DESKTOP_BYTES, FILE_SIZE_LIMIT_MOBILE_BYTES from there
