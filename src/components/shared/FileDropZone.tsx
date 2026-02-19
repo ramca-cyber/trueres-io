@@ -1,6 +1,6 @@
 import { useCallback, useState, useRef } from 'react';
-import { Upload, File } from 'lucide-react';
-import { formatFileSize } from '@/config/constants';
+import { Upload, AlertTriangle } from 'lucide-react';
+import { formatFileSize, FILE_SIZE_WARN_BYTES, FILE_SIZE_LIMIT_DESKTOP_BYTES, FILE_SIZE_LIMIT_MOBILE_BYTES } from '@/config/constants';
 
 interface FileDropZoneProps {
   accept?: string;
@@ -10,36 +10,44 @@ interface FileDropZoneProps {
   sublabel?: string;
   multiple?: boolean;
   onMultipleFiles?: (files: File[]) => void;
+  disabled?: boolean;
 }
 
 export function FileDropZone({
   accept,
-  maxSizeMB = 500,
   onFileSelect,
   label = 'Drop your file here',
   sublabel = 'or click to browse',
   multiple = false,
   onMultipleFiles,
+  disabled = false,
 }: FileDropZoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const maxBytes = isMobile ? FILE_SIZE_LIMIT_MOBILE_BYTES : FILE_SIZE_LIMIT_DESKTOP_BYTES;
 
   const validateAndSelect = useCallback(
     (files: FileList | null) => {
-      if (!files || files.length === 0) return;
+      if (!files || files.length === 0 || disabled) return;
       setError(null);
-
-      const maxBytes = maxSizeMB * 1024 * 1024;
+      setWarning(null);
 
       if (multiple && onMultipleFiles) {
         const validFiles: File[] = [];
         for (let i = 0; i < files.length; i++) {
           if (files[i].size > maxBytes) {
-            setError(`${files[i].name} exceeds ${maxSizeMB}MB limit`);
+            setError(`${files[i].name} exceeds ${formatFileSize(maxBytes)} limit`);
             return;
           }
           validFiles.push(files[i]);
+        }
+        const hasLarge = validFiles.some(f => f.size > FILE_SIZE_WARN_BYTES);
+        if (hasLarge) {
+          setWarning('One or more files are large. Processing may be slow and use significant memory.');
         }
         onMultipleFiles(validFiles);
         return;
@@ -47,33 +55,38 @@ export function FileDropZone({
 
       const file = files[0];
       if (file.size > maxBytes) {
-        setError(`File exceeds ${maxSizeMB}MB limit (${formatFileSize(file.size)})`);
+        setError(`File exceeds ${formatFileSize(maxBytes)} limit (${formatFileSize(file.size)})`);
         return;
+      }
+      if (file.size > FILE_SIZE_WARN_BYTES) {
+        setWarning(`Large file (${formatFileSize(file.size)}). Processing may be slow and use significant memory.`);
       }
       onFileSelect(file);
     },
-    [maxSizeMB, onFileSelect, multiple, onMultipleFiles]
+    [maxBytes, onFileSelect, multiple, onMultipleFiles, disabled]
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      validateAndSelect(e.dataTransfer.files);
+      if (!disabled) validateAndSelect(e.dataTransfer.files);
     },
-    [validateAndSelect]
+    [validateAndSelect, disabled]
   );
 
   return (
     <div
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+      onDragOver={(e) => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      onClick={() => inputRef.current?.click()}
-      className={`relative cursor-pointer rounded-lg border-2 border-dashed p-8 text-center transition-all ${
-        isDragging
-          ? 'border-primary bg-primary/5 scale-[1.01]'
-          : 'border-border hover:border-primary/50 hover:bg-secondary/50'
+      onClick={() => !disabled && inputRef.current?.click()}
+      className={`relative rounded-lg border-2 border-dashed p-8 text-center transition-all ${
+        disabled
+          ? 'cursor-not-allowed opacity-50 border-border'
+          : isDragging
+            ? 'cursor-pointer border-primary bg-primary/5 scale-[1.01]'
+            : 'cursor-pointer border-border hover:border-primary/50 hover:bg-secondary/50'
       }`}
     >
       <input
@@ -82,6 +95,7 @@ export function FileDropZone({
         accept={accept}
         multiple={multiple}
         className="hidden"
+        disabled={disabled}
         onChange={(e) => validateAndSelect(e.target.files)}
       />
 
@@ -95,6 +109,13 @@ export function FileDropZone({
       )}
       {multiple && (
         <p className="text-xs text-primary/70 mt-1">Select multiple files for batch processing</p>
+      )}
+
+      {warning && (
+        <div className="mt-3 flex items-center justify-center gap-1.5 text-sm font-medium text-amber-500">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span>{warning}</span>
+        </div>
       )}
 
       {error && (

@@ -5,8 +5,9 @@ export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp';
 export const ALL_MEDIA_ACCEPT = `${AUDIO_ACCEPT},${VIDEO_ACCEPT}`;
 
 // File size limits
-export const FILE_SIZE_WARN_BYTES = 200 * 1024 * 1024; // 200MB
-export const FILE_SIZE_LIMIT_MOBILE_BYTES = 500 * 1024 * 1024; // 500MB
+export const FILE_SIZE_WARN_BYTES = 200 * 1024 * 1024; // 200MB soft warning
+export const FILE_SIZE_LIMIT_DESKTOP_BYTES = 500 * 1024 * 1024; // 500MB hard limit desktop
+export const FILE_SIZE_LIMIT_MOBILE_BYTES = 200 * 1024 * 1024; // 200MB hard limit mobile
 
 // Analysis defaults
 export const DEFAULT_FFT_SIZE = 4096;

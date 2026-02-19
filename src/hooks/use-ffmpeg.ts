@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useFFmpegStore } from '@/stores/ffmpeg-store';
 import { getFFmpeg, processFile, isFFmpegLoaded, cancelProcessing } from '@/engines/processing/ffmpeg-manager';
+import { toast } from '@/hooks/use-toast';
 
 /**
  * Hook for ffmpeg.wasm processing operations
@@ -58,6 +59,19 @@ export function useFFmpeg() {
           const msg = e instanceof Error ? e.message : 'Failed to load processing engine';
           store.setLoadError(msg);
           return null;
+        }
+      }
+
+      // Best-effort memory pressure warning (Chrome only)
+      const deviceMem = (navigator as any).deviceMemory as number | undefined;
+      if (deviceMem) {
+        const estimatedBytes = inputFile.size * 3;
+        const deviceBytes = deviceMem * 1024 * 1024 * 1024;
+        if (estimatedBytes > deviceBytes * 0.7) {
+          toast({
+            title: 'High memory usage expected',
+            description: `This file may use up to ${Math.round(estimatedBytes / (1024 * 1024))}MB of memory. Close other tabs for best results.`,
+          });
         }
       }
 
