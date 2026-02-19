@@ -47,11 +47,8 @@ const AudioConverter = () => {
     useToolSettingsStore.getState().setSettings(TOOL_ID, { outputFormat, bitrate, gainDb });
   }, [outputFormat, bitrate, gainDb]);
 
-  const { process, processing, progress, outputBlob, outputFileName, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
+  const { process, processing, progress, outputBlob, loading, loadError, processError, clearOutput, reset, preparing } = useFFmpeg();
   const batch = useBatchProcess();
-
-
-
 
   const handleFileSelect = (f: File) => { setFile(f); clearOutput(); cacheFile(`${TOOL_ID}-input`, f); clearCachedFile(`${TOOL_ID}-output`); };
   const handleMultipleFiles = (files: File[]) => {
