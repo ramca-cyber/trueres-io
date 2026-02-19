@@ -1,46 +1,77 @@
 
 
-# Audit Fix: Sitemap Sync, True Peak Disclaimer, and Code Accuracy
+# Guardrails and Warnings for File Processing
 
-## Issues Addressed
+## Current State
 
-### 1. Sitemap missing `audio-to-video`
-The tool exists in the registry (route `/audio-to-video`) but has no entry in `public/sitemap.xml`.
+- The `ProcessingBanner` already warns during conversion (sticky red banner + `beforeunload` listener) -- this is done.
+- `FileDropZone` has a hard limit of 500MB but no soft warning for large files.
+- The 200MB warning threshold (`FILE_SIZE_WARN_BYTES`) is defined in constants but never actually used anywhere.
+- No mobile-specific file size limits are enforced despite `FILE_SIZE_LIMIT_MOBILE_BYTES` existing.
+- No memory pressure detection or other guardrails exist.
 
-**Fix**: Add the missing URL entry to the sitemap.
+## Plan
 
-### 2. LUFS "True Peak" code/UI inconsistencies
-The LUFS Meter UI correctly labels it "Sample Peak" with subtext "(not true peak)" -- good. But there are two remaining inconsistencies:
+### 1. Large File Warning in FileDropZone
 
-- **`lufs.ts` line 113**: Comment says "True Peak (oversampled peak detection, simplified 4x)" but the code just scans raw samples with no oversampling. Fix the misleading comment.
-- **`ComplianceBadge.tsx`**: Displays "dBTP" (decibels True Peak) next to the value, but this is sample peak, not true peak. Change label to "dBFS" and add a note.
+Add a yellow warning (not a block) when a file exceeds 200MB but is under the hard limit. Also enforce a lower hard limit on mobile (500MB desktop, 200MB mobile).
 
-### 3. Items NOT being changed (and why)
+**`src/components/shared/FileDropZone.tsx`**:
+- Import `FILE_SIZE_WARN_BYTES` from constants
+- After accepting a valid file, check if `file.size > FILE_SIZE_WARN_BYTES` -- if so, show a persistent amber warning: "Large file (X MB). Processing may be slow and use significant memory."
+- Add a `warning` state alongside the existing `error` state
+- Detect mobile via `window.innerWidth < 768` and lower hard limit to 200MB on mobile devices
 
-| Issue | Status | Reason |
-|-------|--------|--------|
-| FFT trig per-stage vs global cache | No change | Current per-stage tables are already fast; marginal gain not worth the complexity |
-| Bit depth on Float32 | No change | Web Audio API limitation; cannot be fixed without a custom decoder |
-| Domain not deployed | No change | Infrastructure task outside code scope |
-| No ad infrastructure | No change | Business decision, not a code fix |
+### 2. Add Memory Pressure Check Before Processing
 
-## File Changes
+**`src/hooks/use-ffmpeg.ts`**:
+- Before starting `process()`, estimate memory needs (roughly `file.size * 3` for input + decode + output)
+- If `navigator.deviceMemory` is available (Chrome) and estimated usage exceeds 70% of reported memory, show a warning via toast (non-blocking)
+- This is best-effort -- the API isn't available in all browsers
 
-### `public/sitemap.xml`
-Add one entry after the existing Audio Processing section:
-```xml
-<url><loc>https://trueres.io/audio-to-video</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
+### 3. Prevent Double File Drops During Processing
+
+**`src/components/shared/FileDropZone.tsx`**:
+- Accept a new `disabled` prop
+- When disabled, ignore drops/clicks and show a muted visual state
+
+**Tool pages** already hide the drop zone when a file is loaded, so this is a minor safeguard for edge cases.
+
+### 4. Add Export/Download Warning for Large Outputs
+
+**`src/components/shared/DownloadButton.tsx`**:
+- If the blob size exceeds 200MB, show a small note below the button: "Large file -- download may take a moment"
+
+### 5. Constants Cleanup
+
+**`src/config/constants.ts`**:
+- Add `FILE_SIZE_LIMIT_DESKTOP_BYTES = 500 * 1024 * 1024`
+- Rename `FILE_SIZE_LIMIT_MOBILE_BYTES` to be consistent
+- Remove the duplicate definitions in `browser-compat.ts`
+
+## Technical Details
+
+### FileDropZone Changes
+
+```text
++-----------------------------+
+|  Drop your file here        |
+|  or click to browse         |
+|                             |
+|  [amber] Large file (312MB) |
+|  Processing may be slow     |
++-----------------------------+
 ```
 
-### `src/engines/analysis/modules/lufs.ts`
-Fix the misleading comment at line 113:
-```typescript
-// Sample peak (per-sample max, not ITU-R BS.1770 true peak which requires 4x oversampling)
-```
+The warning appears after file selection but does NOT block it -- the file still loads. Only exceeding the hard limit blocks.
 
-### `src/components/display/ComplianceBadge.tsx`
-Change the target display from "dBTP" to "dBFS" since we're measuring sample peak, not true peak:
-```
-Target: -14 LUFS / -1 dBFS
-```
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/components/shared/FileDropZone.tsx` | Large file warning, mobile limit, disabled prop |
+| `src/components/shared/DownloadButton.tsx` | Large output note |
+| `src/hooks/use-ffmpeg.ts` | Memory pressure toast before processing |
+| `src/config/constants.ts` | Add desktop limit constant |
+| `src/config/browser-compat.ts` | Remove duplicate size constants, import from constants.ts |
 
