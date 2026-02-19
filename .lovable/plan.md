@@ -1,37 +1,16 @@
 
+# Minor Cleanup in AudioConverter.tsx
 
-# Optimize Audio-to-Video Conversion Speed
+## Issues Found
 
-## Root Cause
+1. **3 extra blank lines** (lines 52-54) after `const batch = useBatchProcess();` -- leftover whitespace from a previous edit
+2. **Unused destructured variable**: `outputFileName` is pulled from `useFFmpeg()` but never referenced in the component
 
-When an image is provided, the FFmpeg command uses `-loop 1 -i image.jpg` which defaults the input framerate to **25 fps**. The output is set to `-r 1` (1 fps), but FFmpeg still decodes, scales, and crops the image **25 times per second** before discarding 24 of every 25 frames.
+## Changes
 
-For a 5-minute audio track, this means:
-- **Current (with image)**: 5 x 60 x 25 = 7,500 scale+crop operations, then 7,200 frames discarded
-- **Fixed (with image)**: 5 x 60 x 1 = 300 scale+crop operations, zero waste
-- **Black frame path**: Already efficient at 1 fps natively
+**`src/pages/tools/AudioConverter.tsx`**
 
-This is a **25x reduction** in video processing work.
+- Remove the 3 blank lines after line 51
+- Remove `outputFileName` from the destructured `useFFmpeg()` return
 
-## Fix
-
-Add `-framerate 1` before the image input so FFmpeg reads the image at 1 fps to match the output rate.
-
-## File Change
-
-**`src/engines/processing/presets.ts`** -- `audioToVideoArgs` function
-
-Change the image branch from:
-```
-'-loop', '1', '-i', imageInput,
-```
-to:
-```
-'-loop', '1', '-framerate', '1', '-i', imageInput,
-```
-
-That's it. One line, massive speedup. Everything else (scaling, encoding, tune, preset) stays the same.
-
-## Why This Works
-
-`-framerate` is an input option that controls how fast FFmpeg reads the looped image stream. Setting it to 1 means FFmpeg only produces 1 frame per second from the image, matching the output `-r 1`. No frames are decoded, scaled, and then thrown away.
+No other files need cleanup -- the rest of the codebase is consistent and tidy.
