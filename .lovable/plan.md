@@ -1,43 +1,82 @@
 
+# Fix: Visualizations Not Full-Width + Spectrum Runs Forever
 
-# Fix: Invisible Spectrum Bars + Missing Metadata
+## Problem 1: Waveform & Spectrum Not Filling Full Width
 
-## Issue 1: Live Spectrum Bars Not Visible
+The `WaveformSeekbar` initializes `canvasWidth` to 600px and only updates it via `ResizeObserver`. On first render, it draws at 600px before the observer fires. Similarly, `LiveSpectrum` starts with `sizeRef.current.w = 0` and waits for ResizeObserver -- meaning the first few frames may render incorrectly or not at all.
 
-**Root cause**: The Canvas 2D `fillStyle` property does not support modern space-separated HSL syntax. The code reads `--primary` as `30 83% 63%` and produces `hsla(30 83% 63%, 0.7)` -- which Canvas silently ignores, drawing nothing.
+**Fix**: Initialize canvas width from the container's actual `clientWidth` on mount, so the very first frame is full-width.
 
-**Fix** in `src/components/shared/LiveSpectrum.tsx`:
-- Replace the HSL string with a comma-separated format: `hsla(30, 83%, 63%, 0.7)`
-- Parse the `--primary` value and insert commas, or split the space-separated values
-
-```
-// Before
-ctx.fillStyle = `hsla(${primaryHSL}, ${alpha})`;
-
-// After - split "30 83% 63%" into "30, 83%, 63%"
-const [h, s, l] = primaryHSL.split(' ');
-...
-ctx.fillStyle = `hsla(${h}, ${s}, ${l}, ${alpha})`;
-```
+### Files:
+- **`src/components/shared/WaveformSeekbar.tsx`**: Initialize `canvasWidth` state from `containerRef.current.clientWidth` inside the ResizeObserver setup, so the first render uses the real width instead of 600.
+- **`src/components/shared/LiveSpectrum.tsx`**: Initialize `sizeRef.current.w` from `canvas.clientWidth` in the ResizeObserver setup effect.
+- **`src/components/shared/LiveSpectrogram.tsx`**: Same fix -- initialize `actualWidthRef.current` from container's `clientWidth`.
 
 ---
 
-## Issue 2: No Album Art / Metadata for Some Formats
+## Problem 2: Spectrum Animation Runs When Audio Is Paused/Stopped
 
-**Root cause**: `MetadataDisplay.extractMetadata()` only handles mp3 (ID3), flac, ogg, and opus. Common formats like `.m4a`, `.wav`, `.aac`, `.aiff`, `.weba` have no metadata extraction, so the component returns null and shows nothing.
+The `LiveSpectrum` and `LiveSpectrogram` both run a `requestAnimationFrame` loop unconditionally once mounted. Even when audio is paused, the loop keeps running (drawing near-zero bars), wasting CPU.
 
-**Fix** in `src/components/shared/MetadataDisplay.tsx`:
-- Add M4A/MP4 metadata extraction using the existing `mp4-parser.ts` (check if it exposes metadata)
-- Add WAV metadata extraction (WAV can have LIST/INFO chunks with title/artist)
-- Add AIFF metadata extraction using the existing `aiff-parser.ts`
-- For formats with no metadata support, show a fallback display with the filename instead of hiding the component entirely
+**Fix**: Pass the `audioElement` (or a `paused` flag) to the spectrum components. Inside the rAF loop, check if audio is paused -- if so, skip drawing and stop the loop. Re-start the loop when audio resumes via `play`/`pause` event listeners.
 
-**Fallback behavior**: When no metadata can be extracted, still show the file name and a generic music icon so the "now playing" area is never empty for audio tracks.
+### Changes:
+- **`src/components/shared/LiveSpectrum.tsx`**: Add an optional `audioElement` prop. Listen for `play`/`pause` events on it. Only run the rAF loop while audio is playing.
+- **`src/components/shared/LiveSpectrogram.tsx`**: Same approach -- add `audioElement` prop, pause the rAF loop when audio is not playing.
+- **`src/pages/tools/MediaPlayer.tsx`**: Pass `audioRef.current` to `LiveSpectrum` and `LiveSpectrogram` as `audioElement`.
 
 ---
 
-## Files to Change
+## Technical Details
 
-1. **`src/components/shared/LiveSpectrum.tsx`** -- Fix HSL color format for canvas fillStyle
-2. **`src/components/shared/MetadataDisplay.tsx`** -- Add format support and fallback display
+### WaveformSeekbar width init (example):
+```typescript
+// In the ResizeObserver effect:
+useEffect(() => {
+  const el = containerRef.current;
+  if (!el) return;
+  // Set initial width immediately
+  const initialW = el.clientWidth;
+  if (initialW > 0) setCanvasWidth(Math.floor(initialW));
+  // Then observe for future changes
+  const obs = new ResizeObserver(...);
+  ...
+}, []);
+```
 
+### LiveSpectrum pause-aware loop (example):
+```typescript
+interface LiveSpectrumProps {
+  analyserNode: AnalyserNode | null;
+  audioElement?: HTMLAudioElement | null; // new
+  ...
+}
+
+// Inside the draw effect:
+useEffect(() => {
+  ...
+  const el = audioElement;
+  function startLoop() { if (!rafRef.current) draw(); }
+  function stopLoop() { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+
+  if (el) {
+    el.addEventListener('play', startLoop);
+    el.addEventListener('pause', stopLoop);
+    if (!el.paused) startLoop();
+  } else {
+    startLoop(); // fallback: always run if no element provided
+  }
+
+  return () => {
+    stopLoop();
+    el?.removeEventListener('play', startLoop);
+    el?.removeEventListener('pause', stopLoop);
+  };
+}, [analyserNode, audioElement, ...]);
+```
+
+### MediaPlayer.tsx usage:
+```tsx
+<LiveSpectrum analyserNode={analyserNode} audioElement={audioRef.current} height={48} barCount={64} />
+<LiveSpectrogram analyserNode={analyserNode} audioElement={audioRef.current} height={80} />
+```
