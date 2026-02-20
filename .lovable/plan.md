@@ -1,16 +1,38 @@
 
-# Minor Cleanup in AudioConverter.tsx
 
-## Issues Found
+# Fix: "Next track" crashes in Media Player
 
-1. **3 extra blank lines** (lines 52-54) after `const batch = useBatchProcess();` -- leftover whitespace from a previous edit
-2. **Unused destructured variable**: `outputFileName` is pulled from `useFFmpeg()` but never referenced in the component
+## Root Cause
 
-## Changes
+The `AudioPlayer` component uses `createMediaElementSource()` from the Web Audio API to connect the `<audio>` element to an audio processing graph (EQ, analyser, gain). This API method can only be called **once per `<audio>` element** -- ever. Even closing the old `AudioContext` does not release the binding.
 
-**`src/pages/tools/AudioConverter.tsx`**
+When you click "Next", React keeps the same `AudioPlayer` component mounted (same position in the tree) and just updates its `src` prop. The internal effect tries to create a new `MediaElementSource` on the same DOM element, which throws an `InvalidStateError`.
 
-- Remove the 3 blank lines after line 51
-- Remove `outputFileName` from the destructured `useFFmpeg()` return
+## Fix
 
-No other files need cleanup -- the rest of the codebase is consistent and tidy.
+Add a `key` prop to `AudioPlayer` (and `VideoPlayer` for consistency) in `MediaPlayer.tsx`, tied to the current track's unique ID. This forces React to fully unmount the old player and mount a fresh one with a brand-new `<audio>` element when the track changes.
+
+### File: `src/pages/tools/MediaPlayer.tsx`
+
+**Line ~529** -- AudioPlayer render:
+```tsx
+// Before
+<AudioPlayer ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
+  onAnalyserReady={setAnalyserNode} />
+
+// After
+<AudioPlayer key={current.id} ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
+  onAnalyserReady={setAnalyserNode} />
+```
+
+**Line ~527** -- VideoPlayer render:
+```tsx
+// Before
+<VideoPlayer ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
+
+// After
+<VideoPlayer key={current.id} ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
+```
+
+This is a one-line-per-component change. When the track ID changes, React destroys the old player (cleaning up the AudioContext and MediaElementSource) and creates a fresh one, avoiding the `InvalidStateError`.
+
