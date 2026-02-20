@@ -1,38 +1,43 @@
 
 
-# Fix: "Next track" crashes in Media Player
+# Fix: Invisible Spectrum Bars + Missing Metadata
 
-## Root Cause
+## Issue 1: Live Spectrum Bars Not Visible
 
-The `AudioPlayer` component uses `createMediaElementSource()` from the Web Audio API to connect the `<audio>` element to an audio processing graph (EQ, analyser, gain). This API method can only be called **once per `<audio>` element** -- ever. Even closing the old `AudioContext` does not release the binding.
+**Root cause**: The Canvas 2D `fillStyle` property does not support modern space-separated HSL syntax. The code reads `--primary` as `30 83% 63%` and produces `hsla(30 83% 63%, 0.7)` -- which Canvas silently ignores, drawing nothing.
 
-When you click "Next", React keeps the same `AudioPlayer` component mounted (same position in the tree) and just updates its `src` prop. The internal effect tries to create a new `MediaElementSource` on the same DOM element, which throws an `InvalidStateError`.
+**Fix** in `src/components/shared/LiveSpectrum.tsx`:
+- Replace the HSL string with a comma-separated format: `hsla(30, 83%, 63%, 0.7)`
+- Parse the `--primary` value and insert commas, or split the space-separated values
 
-## Fix
-
-Add a `key` prop to `AudioPlayer` (and `VideoPlayer` for consistency) in `MediaPlayer.tsx`, tied to the current track's unique ID. This forces React to fully unmount the old player and mount a fresh one with a brand-new `<audio>` element when the track changes.
-
-### File: `src/pages/tools/MediaPlayer.tsx`
-
-**Line ~529** -- AudioPlayer render:
-```tsx
+```
 // Before
-<AudioPlayer ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
-  onAnalyserReady={setAnalyserNode} />
+ctx.fillStyle = `hsla(${primaryHSL}, ${alpha})`;
 
-// After
-<AudioPlayer key={current.id} ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
-  onAnalyserReady={setAnalyserNode} />
+// After - split "30 83% 63%" into "30, 83%, 63%"
+const [h, s, l] = primaryHSL.split(' ');
+...
+ctx.fillStyle = `hsla(${h}, ${s}, ${l}, ${alpha})`;
 ```
 
-**Line ~527** -- VideoPlayer render:
-```tsx
-// Before
-<VideoPlayer ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
+---
 
-// After
-<VideoPlayer key={current.id} ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
-```
+## Issue 2: No Album Art / Metadata for Some Formats
 
-This is a one-line-per-component change. When the track ID changes, React destroys the old player (cleaning up the AudioContext and MediaElementSource) and creates a fresh one, avoiding the `InvalidStateError`.
+**Root cause**: `MetadataDisplay.extractMetadata()` only handles mp3 (ID3), flac, ogg, and opus. Common formats like `.m4a`, `.wav`, `.aac`, `.aiff`, `.weba` have no metadata extraction, so the component returns null and shows nothing.
+
+**Fix** in `src/components/shared/MetadataDisplay.tsx`:
+- Add M4A/MP4 metadata extraction using the existing `mp4-parser.ts` (check if it exposes metadata)
+- Add WAV metadata extraction (WAV can have LIST/INFO chunks with title/artist)
+- Add AIFF metadata extraction using the existing `aiff-parser.ts`
+- For formats with no metadata support, show a fallback display with the filename instead of hiding the component entirely
+
+**Fallback behavior**: When no metadata can be extracted, still show the file name and a generic music icon so the "now playing" area is never empty for audio tracks.
+
+---
+
+## Files to Change
+
+1. **`src/components/shared/LiveSpectrum.tsx`** -- Fix HSL color format for canvas fillStyle
+2. **`src/components/shared/MetadataDisplay.tsx`** -- Add format support and fallback display
 
