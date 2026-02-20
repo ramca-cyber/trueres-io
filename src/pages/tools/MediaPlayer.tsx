@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ALL_MEDIA_ACCEPT, formatFileSize } from '@/config/constants';
 import { formatTime } from '@/lib/utils';
 import {
-  RotateCcw, AlertTriangle, RefreshCw,
+  AlertTriangle, RefreshCw,
   SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Music, Film, Minimize2, BarChart3,
   Timer, TimerOff, Download, Upload, AudioLines, VideoOff,
@@ -843,9 +843,6 @@ export default function MediaPlayer() {
             <ToolActionGrid file={current.file} currentToolId="media-player" />
           )}
 
-          <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={handleClear}>
-            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Start over
-          </Button>
         </div>
       )}
     </ToolPage>
