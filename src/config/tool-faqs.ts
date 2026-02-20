@@ -138,6 +138,16 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
     { q: 'What format are the output segments?', a: 'Segments are saved in the same format as your input file. The tool uses fast codec-copy mode to avoid re-encoding.' },
     { q: 'Can I download all segments at once?', a: 'Yes. After processing, click "Download All" to save each segment as a separate file.' },
   ],
+  'video-merger': [
+    { q: 'How does video merging work?', a: 'The tool concatenates your video files in order using the ffmpeg concat demuxer. All files are re-encoded to ensure compatibility across different codecs and resolutions.' },
+    { q: 'Can I merge different video formats?', a: 'Yes. You can mix MP4, WebM, AVI, MKV, and MOV files. The tool re-encodes everything to your chosen output format (MP4 or WebM).' },
+    { q: 'Why is video merging slower than audio?', a: 'Video files require re-encoding to ensure codec and resolution compatibility. This is computationally intensive and depends on file size and your device speed.' },
+  ],
+  'video-splitter': [
+    { q: 'How do I add split points?', a: 'Play the video and click the clock button to set the current playback time as a split point, or type a time in seconds manually.' },
+    { q: 'Does splitting re-encode the video?', a: 'No. The splitter uses fast codec-copy mode (-c copy) which preserves the original quality and is nearly instant.' },
+    { q: 'Can I download all segments at once?', a: 'Yes. After processing, click "Download All" to save each segment as a separate file.' },
+  ],
   'audio-to-video': [
     { q: 'What does this tool do?', a: 'It combines an audio file with an optional background image to create an MP4 video. Perfect for uploading podcasts or music to YouTube.' },
     { q: 'Do I need to provide an image?', a: 'No. If no image is provided, a solid black frame is used. If you upload an image, it will be scaled and cropped to fill the chosen resolution.' },
