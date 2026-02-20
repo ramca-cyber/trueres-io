@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef } from 'react';
-import { GripVertical, X, Volume2, RefreshCw } from 'lucide-react';
+import { useState, useCallback, useRef, useMemo } from 'react';
+import { GripVertical, X, Volume2, RefreshCw, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { formatFileSize } from '@/config/constants';
@@ -13,6 +13,8 @@ export interface QueueItem {
   status: 'pending' | 'transcoding' | 'ready' | 'error';
   progress?: number;
 }
+
+const PAGE_SIZE = 7;
 
 interface PlaylistPanelProps {
   queue: QueueItem[];
@@ -35,7 +37,13 @@ export function PlaylistPanel({
 }: PlaylistPanelProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<number | null>(null);
+  const [page, setPage] = useState(0);
   const dragCounter = useRef(0);
+
+  const totalPages = Math.max(1, Math.ceil(queue.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pageStart = safePage * PAGE_SIZE;
+  const pageItems = useMemo(() => queue.slice(pageStart, pageStart + PAGE_SIZE), [queue, pageStart]);
 
   const handleDragStart = useCallback((e: React.DragEvent, index: number) => {
     setDragIndex(index);
@@ -84,68 +92,93 @@ export function PlaylistPanel({
       </div>
 
       {/* Track list */}
-      <ScrollArea className="max-h-[280px]">
-        <div className="divide-y divide-border">
-          {queue.map((item, index) => {
-            const isCurrent = index === currentIndex;
-            const isDragging = dragIndex === index;
-            const isDropTarget = dropTarget === index && dragIndex !== null && dragIndex !== index;
+      <div className="divide-y divide-border">
+        {pageItems.map((item, pageIdx) => {
+          const index = pageStart + pageIdx;
+          const isCurrent = index === currentIndex;
+          const isDragging = dragIndex === index;
+          const isDropTarget = dropTarget === index && dragIndex !== null && dragIndex !== index;
 
-            return (
-              <div
-                key={item.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDrop={(e) => handleDrop(e, index)}
-                onDragEnd={handleDragEnd}
-                onClick={() => onSelect(index)}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors select-none',
-                  isCurrent ? 'bg-primary/10' : 'hover:bg-secondary/50',
-                  isDragging && 'opacity-40',
-                  isDropTarget && 'border-t-2 border-t-primary',
+          return (
+            <div
+              key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
+              onClick={() => onSelect(index)}
+              className={cn(
+                'flex items-center gap-2 px-3 py-2 cursor-pointer transition-colors select-none',
+                isCurrent ? 'bg-primary/10' : 'hover:bg-secondary/50',
+                isDragging && 'opacity-40',
+                isDropTarget && 'border-t-2 border-t-primary',
+              )}
+            >
+              {/* Drag handle */}
+              <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
+
+              {/* Track number / status indicator */}
+              <div className="w-6 text-center shrink-0">
+                {item.status === 'transcoding' ? (
+                  <RefreshCw className="h-3.5 w-3.5 text-primary animate-spin mx-auto" />
+                ) : isCurrent ? (
+                  <Volume2 className="h-3.5 w-3.5 text-primary mx-auto" />
+                ) : (
+                  <span className="text-xs text-muted-foreground font-mono">{String(index + 1).padStart(2, '0')}</span>
                 )}
-              >
-                {/* Drag handle */}
-                <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
-
-                {/* Track number / status indicator */}
-                <div className="w-6 text-center shrink-0">
-                  {item.status === 'transcoding' ? (
-                    <RefreshCw className="h-3.5 w-3.5 text-primary animate-spin mx-auto" />
-                  ) : isCurrent ? (
-                    <Volume2 className="h-3.5 w-3.5 text-primary mx-auto" />
-                  ) : (
-                    <span className="text-xs text-muted-foreground font-mono">{String(index + 1).padStart(2, '0')}</span>
-                  )}
-                </div>
-
-                {/* Filename */}
-                <span className={cn(
-                  'text-sm truncate flex-1 min-w-0',
-                  isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground',
-                )}>
-                  {item.file.name}
-                </span>
-
-                {/* File size */}
-                <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                  {formatFileSize(item.file.size)}
-                </span>
-
-                {/* Remove button */}
-                <button
-                  onClick={(e) => { e.stopPropagation(); onRemove(index); }}
-                  className="shrink-0 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
               </div>
-            );
-          })}
-        </div>
-      </ScrollArea>
+
+              {/* Filename */}
+              <span className={cn(
+                'text-sm truncate flex-1 min-w-0',
+                isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground',
+              )}>
+                {item.file.name}
+              </span>
+
+              {/* File size */}
+              <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                {formatFileSize(item.file.size)}
+              </span>
+
+              {/* Remove button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onRemove(index); }}
+                className="shrink-0 p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer: pagination + actions */}
+      <div className="flex items-center justify-between border-t border-border px-3 py-2">
+        {totalPages > 1 ? (
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={safePage === 0}
+              onClick={() => setPage(p => Math.max(0, p - 1))}>
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </Button>
+            <span className="text-[10px] text-muted-foreground font-mono">
+              {safePage + 1}/{totalPages}
+            </span>
+            <Button variant="ghost" size="sm" className="h-6 w-6 p-0" disabled={safePage >= totalPages - 1}
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        ) : (
+          <span className="text-[10px] text-muted-foreground">
+            {queue.length} track{queue.length !== 1 ? 's' : ''}
+          </span>
+        )}
+        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground gap-1" onClick={onClear}>
+          <RotateCcw className="h-3 w-3" /> Start over
+        </Button>
+      </div>
     </div>
   );
 }
