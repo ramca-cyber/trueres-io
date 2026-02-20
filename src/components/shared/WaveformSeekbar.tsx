@@ -4,18 +4,19 @@ import { cn, formatTime } from '@/lib/utils';
 interface WaveformSeekbarProps {
   audioElement: HTMLAudioElement | null;
   className?: string;
-  barColor?: string;
-  progressColor?: string;
-  playheadColor?: string;
   height?: number;
+}
+
+/** Read a CSS custom property (space-separated HSL) and return a canvas-compatible hsl() string */
+function resolveHSL(varName: string, alpha?: number): string {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  const [h, s, l] = raw.split(' ');
+  return alpha != null ? `hsla(${h}, ${s}, ${l}, ${alpha})` : `hsl(${h}, ${s}, ${l})`;
 }
 
 export function WaveformSeekbar({
   audioElement,
   className,
-  barColor = 'hsl(var(--muted-foreground) / 0.35)',
-  progressColor = 'hsl(var(--primary))',
-  playheadColor = 'hsl(var(--destructive))',
   height = 56,
 }: WaveformSeekbarProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -132,14 +133,19 @@ export function WaveformSeekbar({
     const progressX = progress * w;
     const mid = h / 2;
 
+    const barColorResolved = resolveHSL('--muted-foreground', 0.35);
+    const progressColorResolved = resolveHSL('--primary');
+    const playheadColorResolved = resolveHSL('--destructive');
+    const fgColor = resolveHSL('--foreground');
+
     for (let i = 0; i < numBuckets; i++) {
       const x = (i / numBuckets) * w;
       const peakH = peaks[i] * mid * 0.9;
-      ctx.fillStyle = x < progressX ? progressColor : barColor;
+      ctx.fillStyle = x < progressX ? progressColorResolved : barColorResolved;
       ctx.fillRect(x, mid - peakH, barW, peakH * 2);
     }
 
-    ctx.strokeStyle = playheadColor;
+    ctx.strokeStyle = playheadColorResolved;
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(progressX, 0);
@@ -147,7 +153,7 @@ export function WaveformSeekbar({
     ctx.stroke();
 
     if (hovering) {
-      ctx.strokeStyle = 'hsl(var(--foreground) / 0.3)';
+      ctx.strokeStyle = resolveHSL('--foreground', 0.3);
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(hoverX, 0);
@@ -155,12 +161,12 @@ export function WaveformSeekbar({
       ctx.stroke();
 
       const hoverTime = duration > 0 ? (hoverX / w) * duration : 0;
-      ctx.fillStyle = 'hsl(var(--foreground))';
+      ctx.fillStyle = fgColor;
       ctx.font = '10px monospace';
       ctx.textAlign = hoverX > w / 2 ? 'right' : 'left';
       ctx.fillText(formatTime(hoverTime), hoverX > w / 2 ? hoverX - 4 : hoverX + 4, 12);
     }
-  }, [peaks, canvasWidth, height, currentTime, duration, barColor, progressColor, playheadColor, hovering, hoverX]);
+  }, [peaks, canvasWidth, height, currentTime, duration, hovering, hoverX]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     if (!audioElement || !duration) return;
