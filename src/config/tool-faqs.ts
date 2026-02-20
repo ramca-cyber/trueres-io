@@ -128,6 +128,16 @@ export const TOOL_FAQS: Record<string, { q: string; a: string }[]> = {
     { q: 'Do I need a headphone amplifier?', a: 'It depends on impedance and sensitivity. Most IEMs and low-impedance headphones (16-32Ω) work fine from a phone. High-impedance models (250Ω+) or low-sensitivity planars typically need a dedicated amp.' },
     { q: 'What is the Harman target curve?', a: 'The Harman target is a frequency response curve developed through listener preference research. It features a slight bass boost and gentle treble rolloff, representing what most listeners find pleasing.' },
   ],
+  'audio-merger': [
+    { q: 'How does audio merging work?', a: 'The tool concatenates your audio files in order using the ffmpeg concat demuxer. All files are re-encoded to a common output format to ensure compatibility.' },
+    { q: 'Can I merge files in different formats?', a: 'Yes. You can mix MP3, WAV, FLAC, and other formats. The tool re-encodes everything to your chosen output format.' },
+    { q: 'Is there a limit on the number of files?', a: 'No hard limit. All processing happens in your browser, so very large batches may use significant memory.' },
+  ],
+  'audio-splitter': [
+    { q: 'How do I add split points?', a: 'Click on the waveform to add a split point, or type a time in seconds and click "Add". You can remove any split point from the segment list.' },
+    { q: 'What format are the output segments?', a: 'Segments are saved in the same format as your input file. The tool uses fast codec-copy mode to avoid re-encoding.' },
+    { q: 'Can I download all segments at once?', a: 'Yes. After processing, click "Download All" to save each segment as a separate file.' },
+  ],
   'audio-to-video': [
     { q: 'What does this tool do?', a: 'It combines an audio file with an optional background image to create an MP4 video. Perfect for uploading podcasts or music to YouTube.' },
     { q: 'Do I need to provide an image?', a: 'No. If no image is provided, a solid black frame is used. If you upload an image, it will be scaled and cropped to fill the chosen resolution.' },

@@ -280,6 +280,33 @@ export const TOOLS: ToolDefinition[] = [
     keywords: ['channel', 'stereo', 'mono', 'left', 'right', 'extract', 'merge'],
   },
 
+  {
+    id: 'audio-merger',
+    name: 'Audio Merger',
+    shortName: 'Merger',
+    route: '/audio-merger',
+    category: 'processing',
+    engine: 'ffmpeg',
+    description: 'Concatenate two or more audio files into a single file. Reorder tracks, choose output format, and download the merged result.',
+    metaDescription: 'Free online audio merger. Join multiple audio files into one. Supports MP3, WAV, FLAC, and more. Browser-based, no upload.',
+    icon: 'Combine',
+    acceptsFormats: ['wav', 'flac', 'aiff', 'mp3', 'ogg', 'aac', 'm4a'],
+    keywords: ['merge', 'join', 'concatenate', 'combine', 'audio merger', 'append'],
+  },
+  {
+    id: 'audio-splitter',
+    name: 'Audio Splitter',
+    shortName: 'Splitter',
+    route: '/audio-splitter',
+    category: 'processing',
+    engine: 'ffmpeg',
+    description: 'Split an audio file into multiple segments at custom time points. Download individual segments or all at once.',
+    metaDescription: 'Free online audio splitter. Split audio files into segments at custom time points. Browser-based, no upload required.',
+    icon: 'Slice',
+    acceptsFormats: ['wav', 'flac', 'aiff', 'mp3', 'ogg', 'aac', 'm4a'],
+    keywords: ['split', 'divide', 'segment', 'cut', 'audio splitter', 'slice'],
+  },
+
   // ═══════════════════════════════════════════
   // Category 3: Video Processing
   // ═══════════════════════════════════════════

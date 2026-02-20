@@ -72,6 +72,8 @@ const SoundstageTest = lazy(() => import("./pages/tools/SoundstageTest"));
 const ChannelBalance = lazy(() => import("./pages/tools/ChannelBalance"));
 const EarTraining = lazy(() => import("./pages/tools/EarTraining"));
 const HeadphoneGuide = lazy(() => import("./pages/tools/HeadphoneGuide"));
+const AudioMerger = lazy(() => import("./pages/tools/AudioMerger"));
+const AudioSplitter = lazy(() => import("./pages/tools/AudioSplitter"));
 
 
 
@@ -130,6 +132,8 @@ const App = () => {
                 <Route path="/sample-rate-converter" element={<SampleRateConverter />} />
                 <Route path="/channel-ops" element={<ChannelOps />} />
                 <Route path="/audio-to-video" element={<AudioToVideo />} />
+                <Route path="/audio-merger" element={<AudioMerger />} />
+                <Route path="/audio-splitter" element={<AudioSplitter />} />
 
                 {/* Video Processing */}
                 <Route path="/video-to-mp3" element={<VideoToMp3 />} />
