@@ -1,22 +1,26 @@
 
 
-# Fix: AllTools page Helmet title error
+# Move "Start over" to the same row as Export / Add files
 
 ## Problem
-The `<title>` tag in `AllTools.tsx` uses JSX expression interpolation:
-```jsx
-<title>All {TOOLS.length} Free Audio & Video Tools — TrueRes.io</title>
-```
-`react-helmet-async` does not support multiple children or expressions inside `<title>` -- it requires a single string. This causes an `Invariant Violation` that crashes the page via the ErrorBoundary.
+The "Start over" button is rendered as a standalone element below the queue card (inside `PlaylistPanel.tsx`), while "Export .m3u" and "Add files" live in a separate row in `MediaPlayer.tsx`. This makes it look orphaned and disconnected.
 
-## Fix
-Change the `<title>` to use a JavaScript template literal so it resolves to one string:
+## Solution
+Remove the "Start over" button from `PlaylistPanel` and place it in the existing button row in `MediaPlayer.tsx`, aligned to the right using `ml-auto`.
 
-```jsx
-<title>{`All ${TOOLS.length} Free Audio & Video Tools — TrueRes.io`}</title>
+### Visual result
+```text
+[ Export .m3u ]  [ Add files ]                    [ Start over ]
 ```
 
-Apply the same pattern to the `<meta>` tags that also interpolate `TOOLS.length` (lines 28-29), since those can trigger the same issue.
+## Changes
 
-## File
-- **`src/pages/AllTools.tsx`** -- wrap all Helmet children that use `{TOOLS.length}` in template literal strings.
+### 1. `src/components/shared/PlaylistPanel.tsx`
+- Remove the "Start over" `div` block below the queue card (lines 172-177)
+- Remove `RotateCcw` from the icon imports (no longer used here)
+- The outer wrapper `div` with `space-y-1.5` can be simplified since it only contains the card now
+
+### 2. `src/pages/tools/MediaPlayer.tsx`
+- In the playlist utilities row (lines 831-838), add the "Start over" button with destructive styling and `ml-auto` to push it to the right end of the row
+- Add `RotateCcw` to the icon imports
+
