@@ -524,9 +524,9 @@ export default function MediaPlayer() {
             <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="p-4">
                 {current.isVideo ? (
-                  <VideoPlayer ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
+                  <VideoPlayer key={current.id} ref={videoRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay} />
                 ) : (
-                  <AudioPlayer ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
+                  <AudioPlayer key={current.id} ref={audioRef} src={current.playbackSrc} onEnded={handleEnded} autoPlay={autoPlay}
                     onAnalyserReady={setAnalyserNode} />
                 )}
               </div>
