@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
-import { GripVertical, X, Volume2, RefreshCw, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { GripVertical, X, Volume2, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { formatFileSize } from '@/config/constants';
 import { cn } from '@/lib/utils';
@@ -167,13 +167,6 @@ export function PlaylistPanel({
             </Button>
           </div>
         )}
-      </div>
-
-      {/* Start over — right-aligned below queue */}
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={onClear}>
-          <RotateCcw className="h-3 w-3" /> Start over
-        </Button>
       </div>
     </div>
   );

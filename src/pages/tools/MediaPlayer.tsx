@@ -20,7 +20,7 @@ import {
   SkipBack, SkipForward, Shuffle, Repeat, Repeat1,
   Music, Film, Minimize2, BarChart3,
   Timer, TimerOff, Download, Upload, AudioLines, VideoOff,
-  Waves, Play, Pause, Volume2, VolumeX, Gauge,
+  Waves, Play, Pause, Volume2, VolumeX, Gauge, RotateCcw,
 } from 'lucide-react';
 import { processFile, getFFmpeg } from '@/engines/processing/ffmpeg-manager';
 import { useMiniPlayerStore, type LoopMode } from '@/stores/mini-player-store';
@@ -834,6 +834,9 @@ export default function MediaPlayer() {
               </Button>
               <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5" onClick={handleImportPlaylist}>
                 <Upload className="h-3 w-3" /> Add files
+              </Button>
+              <Button variant="outline" size="sm" className="h-7 text-xs gap-1.5 ml-auto border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleClear}>
+                <RotateCcw className="h-3 w-3" /> Start over
               </Button>
             </div>
           )}
