@@ -171,7 +171,7 @@ export function PlaylistPanel({
 
       {/* Start over — right-aligned below queue */}
       <div className="flex justify-end">
-        <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground gap-1" onClick={onClear}>
+        <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5 border-destructive/50 text-destructive hover:bg-destructive/10" onClick={onClear}>
           <RotateCcw className="h-3 w-3" /> Start over
         </Button>
       </div>

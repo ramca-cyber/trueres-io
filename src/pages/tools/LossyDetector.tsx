@@ -115,7 +115,7 @@ const LossyDetector = () => {
           </div>
         )}
 
-        <Button variant="outline" size="sm" onClick={() => useAudioStore.getState().clear()}>
+        <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => useAudioStore.getState().clear()}>
           Analyze another file
         </Button>
       </div>
