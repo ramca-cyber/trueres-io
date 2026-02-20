@@ -45,8 +45,22 @@ export function MiniPlayer() {
   useEffect(() => {
     const el = getMediaEl();
     if (!el || !url) return;
-    if (isPlaying) el.play().catch(() => {});
-    else el.pause();
+
+    const seekAndPlay = () => {
+      const storeTime = useMiniPlayerStore.getState().currentTime;
+      if (storeTime > 0 && Math.abs(el.currentTime - storeTime) > 0.5) {
+        el.currentTime = storeTime;
+      }
+      if (isPlaying) el.play().catch(() => {});
+    };
+
+    if (el.readyState >= 2) {
+      seekAndPlay();
+    } else {
+      el.addEventListener('loadeddata', seekAndPlay, { once: true });
+      if (!isPlaying) el.pause();
+      return () => el.removeEventListener('loadeddata', seekAndPlay);
+    }
   }, [isPlaying, url, getMediaEl]);
 
   useEffect(() => {
