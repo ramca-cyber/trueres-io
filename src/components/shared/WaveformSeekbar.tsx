@@ -42,7 +42,7 @@ export function WaveformSeekbar({
     });
     obs.observe(el);
     return () => obs.disconnect();
-  }, []);
+  }, [!!audioElement]);
 
   // Decode audio to get peaks
   useEffect(() => {
