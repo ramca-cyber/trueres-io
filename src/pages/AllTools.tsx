@@ -19,7 +19,7 @@ const AllTools = () => {
   return (
     <>
       <Helmet>
-        <title>All {TOOLS.length} Free Audio & Video Tools — TrueRes.io</title>
+        <title>{`All ${TOOLS.length} Free Audio & Video Tools — TrueRes.io`}</title>
         <meta name="description" content={`Browse all ${TOOLS.length} free browser-based audio and video tools. Audio analysis, format conversion, video processing, signal generators, and reference guides.`} />
         <meta property="og:title" content="All Tools — TrueRes.io" />
         <meta property="og:description" content={`${TOOLS.length} free professional audio & video tools running in your browser.`} />
