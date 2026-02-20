@@ -220,6 +220,33 @@ export function videoConvertArgs(
   return ['-i', inputName, '-c:v', 'libx264', '-crf', '23', '-c:a', 'aac', outputName];
 }
 
+// ── Audio merge (concat demuxer) ──
+
+export function audioMergeArgs(
+  fileListName: string,
+  outputName: string,
+  format: string,
+  bitrate?: number
+): string[] {
+  // Always re-encode to ensure compatible output
+  switch (format) {
+    case 'mp3':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'libmp3lame', '-b:a', `${bitrate || 320}k`, outputName];
+    case 'wav':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'pcm_s16le', outputName];
+    case 'flac':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'flac', outputName];
+    case 'aac':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'aac', '-b:a', `${bitrate || 256}k`, outputName];
+    case 'ogg':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'libvorbis', '-q:a', '6', outputName];
+    case 'opus':
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-codec:a', 'libopus', '-b:a', `${bitrate || 128}k`, outputName];
+    default:
+      return ['-f', 'concat', '-safe', '0', '-i', fileListName, outputName];
+  }
+}
+
 // ── Gain injection utility ──
 
 export function injectGainFilter(args: string[], gainDb: number): string[] {
