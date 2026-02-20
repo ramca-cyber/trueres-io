@@ -1,82 +1,49 @@
 
-# Fix: Visualizations Not Full-Width + Spectrum Runs Forever
+# Seamless Media Player / Mini Player Handoff
 
-## Problem 1: Waveform & Spectrum Not Filling Full Width
+## Goal
+Make the full Media Player page and the Mini Player act as two views of the same playback session -- navigating away keeps music playing in the mini player, and returning restores the full UI exactly where you left off. No interruption, no queue loss.
 
-The `WaveformSeekbar` initializes `canvasWidth` to 600px and only updates it via `ResizeObserver`. On first render, it draws at 600px before the observer fires. Similarly, `LiveSpectrum` starts with `sizeRef.current.w = 0` and waits for ResizeObserver -- meaning the first few frames may render incorrectly or not at all.
+## How It Works Today (the problem)
+- The queue, current track index, shuffle, loop mode, etc. all live as local `useState` inside the `MediaPlayer` component
+- When you navigate away, the component unmounts and all state is destroyed
+- On mount, the MediaPlayer **deactivates** the MiniPlayer (line 390-394), killing any ongoing playback
+- The MiniPlayer creates its own separate audio element, so there's no shared playback
 
-**Fix**: Initialize canvas width from the container's actual `clientWidth` on mount, so the very first frame is full-width.
+## What Changes
 
-### Files:
-- **`src/components/shared/WaveformSeekbar.tsx`**: Initialize `canvasWidth` state from `containerRef.current.clientWidth` inside the ResizeObserver setup, so the first render uses the real width instead of 600.
-- **`src/components/shared/LiveSpectrum.tsx`**: Initialize `sizeRef.current.w` from `canvas.clientWidth` in the ResizeObserver setup effect.
-- **`src/components/shared/LiveSpectrogram.tsx`**: Same fix -- initialize `actualWidthRef.current` from container's `clientWidth`.
+### 1. Move playback state to the global Zustand store
+Expand `mini-player-store.ts` to hold the full shared state: queue, currentIndex, shuffle, shuffleOrder, loopMode, crossfadeSec, sleepMode, audioOnlyMode, showSpectrum, showSpectrogram. This becomes the single source of truth for both views.
 
----
+### 2. MediaPlayer reads from and writes to the store
+Instead of local `useState` for queue/index/shuffle/loop, the MediaPlayer component will read from and dispatch to the Zustand store. When you load files, change tracks, toggle shuffle -- it all updates the store directly.
 
-## Problem 2: Spectrum Animation Runs When Audio Is Paused/Stopped
+### 3. On navigate away: playback continues in MiniPlayer
+Remove the "pause + activate" minimize logic. Instead, when MediaPlayer unmounts:
+- Playback is already driven by the store, so the MiniPlayer (always rendered in AppShell) simply picks up the audio element and keeps playing
+- No pause/resume gap
 
-The `LiveSpectrum` and `LiveSpectrogram` both run a `requestAnimationFrame` loop unconditionally once mounted. Even when audio is paused, the loop keeps running (drawing near-zero bars), wasting CPU.
+### 4. On navigate back: MediaPlayer restores from store
+Remove the "deactivate MiniPlayer on mount" logic. Instead, when MediaPlayer mounts:
+- It reads queue, currentIndex, playback position from the store
+- It takes over rendering the player UI (the MiniPlayer hides itself when the route is `/media-player`)
+- Playback continues seamlessly at the current position
 
-**Fix**: Pass the `audioElement` (or a `paused` flag) to the spectrum components. Inside the rAF loop, check if audio is paused -- if so, skip drawing and stop the loop. Re-start the loop when audio resumes via `play`/`pause` event listeners.
+### 5. MiniPlayer hides on the Media Player page
+Instead of deactivating the store, the MiniPlayer component checks `location.pathname` -- if we're on `/media-player`, it renders nothing (but the store stays active).
 
-### Changes:
-- **`src/components/shared/LiveSpectrum.tsx`**: Add an optional `audioElement` prop. Listen for `play`/`pause` events on it. Only run the rAF loop while audio is playing.
-- **`src/components/shared/LiveSpectrogram.tsx`**: Same approach -- add `audioElement` prop, pause the rAF loop when audio is not playing.
-- **`src/pages/tools/MediaPlayer.tsx`**: Pass `audioRef.current` to `LiveSpectrum` and `LiveSpectrogram` as `audioElement`.
+## Files to Change
 
----
+1. **`src/stores/mini-player-store.ts`** -- Expand with: shuffle, shuffleOrder, loopMode, crossfadeSec, sleepMode, audioOnlyMode, showSpectrum, showSpectrogram, and their setters. Rename concept to "playback store" internally.
 
-## Technical Details
+2. **`src/pages/tools/MediaPlayer.tsx`** -- Replace local `useState` calls for queue/index/shuffle/loop/sleep/audioOnly with reads from the Zustand store. Keep UI-only state (popover open, analyserNode ref) local. Remove the `deactivate on mount` effect. Remove the `handleMinimize` pause-then-activate pattern.
 
-### WaveformSeekbar width init (example):
-```typescript
-// In the ResizeObserver effect:
-useEffect(() => {
-  const el = containerRef.current;
-  if (!el) return;
-  // Set initial width immediately
-  const initialW = el.clientWidth;
-  if (initialW > 0) setCanvasWidth(Math.floor(initialW));
-  // Then observe for future changes
-  const obs = new ResizeObserver(...);
-  ...
-}, []);
-```
+3. **`src/components/shared/MiniPlayer.tsx`** -- Add a route check: if current path is `/media-player`, return null (hide). Read shuffle/loop from the store instead of local state.
 
-### LiveSpectrum pause-aware loop (example):
-```typescript
-interface LiveSpectrumProps {
-  analyserNode: AnalyserNode | null;
-  audioElement?: HTMLAudioElement | null; // new
-  ...
-}
+4. **`src/components/layout/AppShell.tsx`** -- No changes needed (MiniPlayer is already rendered here).
 
-// Inside the draw effect:
-useEffect(() => {
-  ...
-  const el = audioElement;
-  function startLoop() { if (!rafRef.current) draw(); }
-  function stopLoop() { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+## Technical Notes
 
-  if (el) {
-    el.addEventListener('play', startLoop);
-    el.addEventListener('pause', stopLoop);
-    if (!el.paused) startLoop();
-  } else {
-    startLoop(); // fallback: always run if no element provided
-  }
-
-  return () => {
-    stopLoop();
-    el?.removeEventListener('play', startLoop);
-    el?.removeEventListener('pause', stopLoop);
-  };
-}, [analyserNode, audioElement, ...]);
-```
-
-### MediaPlayer.tsx usage:
-```tsx
-<LiveSpectrum analyserNode={analyserNode} audioElement={audioRef.current} height={48} barCount={64} />
-<LiveSpectrogram analyserNode={analyserNode} audioElement={audioRef.current} height={80} />
-```
+- The audio/video `HTMLMediaElement` will still be created per-component (MiniPlayer has its own, MediaPlayer has its own). The handoff moment involves: store holds currentTime, the new element seeks to that position and plays. This creates a near-seamless transition (sub-100ms gap for audio).
+- An alternative "zero-gap" approach would be to hoist a single shared audio element into AppShell, but that's significantly more complex and the seek-based handoff is standard practice (Spotify web does the same).
+- File blobs (queue items with `playbackSrc`) are already object references in memory, so they survive the store transfer without duplication.
