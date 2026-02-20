@@ -22,7 +22,7 @@ interface TrackResult {
   sampleRate: number;
   bitDepth: number;
   lufs: number;
-  truePeak: number;
+  samplePeak: number;
   dr: number;
 }
 
@@ -60,7 +60,7 @@ const BatchAnalyzer = () => {
           sampleRate: header.sampleRate,
           bitDepth: header.bitDepth,
           lufs: lufs.integrated,
-          truePeak: lufs.truePeak,
+          samplePeak: lufs.samplePeak,
           dr: dr.drScore,
         });
         setResults([...existingResults]);
@@ -69,7 +69,7 @@ const BatchAnalyzer = () => {
         existingResults.push({
           name: file.name, size: file.size, format: 'error',
           duration: 0, sampleRate: 0, bitDepth: 0,
-          lufs: 0, truePeak: 0, dr: 0,
+          lufs: 0, samplePeak: 0, dr: 0,
         });
         setResults([...existingResults]);
       }
@@ -96,10 +96,10 @@ const BatchAnalyzer = () => {
   });
 
   const exportCSV = () => {
-    const headers = ['#', 'Track', 'Duration', 'LUFS', 'True Peak', 'DR', 'Sample Rate', 'Bit Depth'];
+    const headers = ['#', 'Track', 'Duration', 'LUFS', 'Sample Peak', 'DR', 'Sample Rate', 'Bit Depth'];
     const rows = results.map((r, i) => [
       i + 1, r.name, r.duration > 0 ? r.duration.toFixed(2) : '',
-      r.lufs ? r.lufs.toFixed(1) : '', r.truePeak ? r.truePeak.toFixed(1) : '',
+      r.lufs ? r.lufs.toFixed(1) : '', r.samplePeak ? r.samplePeak.toFixed(1) : '',
       r.dr ? `DR${r.dr}` : '', r.sampleRate || '', r.bitDepth || '',
     ]);
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
@@ -136,7 +136,7 @@ const BatchAnalyzer = () => {
                     <TableHead className="text-xs cursor-pointer" onClick={() => handleSort('name')}>Track{sortIcon('name')}</TableHead>
                     <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('duration')}>Duration{sortIcon('duration')}</TableHead>
                     <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('lufs')}>LUFS{sortIcon('lufs')}</TableHead>
-                    <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('truePeak')}>Peak{sortIcon('truePeak')}</TableHead>
+                    <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('samplePeak')}>Peak{sortIcon('samplePeak')}</TableHead>
                     <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('dr')}>DR{sortIcon('dr')}</TableHead>
                     <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('sampleRate')}>Sample Rate{sortIcon('sampleRate')}</TableHead>
                     <TableHead className="text-xs text-right cursor-pointer" onClick={() => handleSort('bitDepth')}>Bit Depth{sortIcon('bitDepth')}</TableHead>
@@ -149,7 +149,7 @@ const BatchAnalyzer = () => {
                       <TableCell className="text-xs font-medium max-w-[200px] truncate">{r.name}</TableCell>
                       <TableCell className="text-xs text-right font-mono">{r.duration > 0 ? formatDuration(r.duration) : '—'}</TableCell>
                       <TableCell className="text-xs text-right font-mono">{r.lufs ? r.lufs.toFixed(1) : '—'}</TableCell>
-                      <TableCell className="text-xs text-right font-mono">{r.truePeak ? r.truePeak.toFixed(1) : '—'}</TableCell>
+                      <TableCell className="text-xs text-right font-mono">{r.samplePeak ? r.samplePeak.toFixed(1) : '—'}</TableCell>
                       <TableCell className={`text-xs text-right font-mono font-bold ${r.dr >= 10 ? 'text-status-pass' : r.dr >= 6 ? 'text-status-warn' : 'text-destructive'}`}>
                         {r.dr ? `DR${r.dr}` : '—'}
                       </TableCell>

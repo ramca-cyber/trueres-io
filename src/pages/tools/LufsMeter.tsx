@@ -72,7 +72,7 @@ const LufsMeter = () => {
             <>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                 <MetricCard label="Integrated LUFS" value={isFinite(lufs.integrated) ? `${lufs.integrated.toFixed(1)}` : '—'} subtext="Overall loudness" status={lufs.integrated > -10 ? 'warn' : lufs.integrated < -20 ? 'info' : 'pass'} />
-                <MetricCard label="Sample Peak" value={isFinite(lufs.truePeak) ? `${lufs.truePeak.toFixed(1)} dBFS` : '—'} subtext="Per-sample max (not true peak)" status={lufs.truePeak > -1 ? 'fail' : 'pass'} />
+                <MetricCard label="Sample Peak" value={isFinite(lufs.samplePeak) ? `${lufs.samplePeak.toFixed(1)} dBFS` : '—'} subtext="Per-sample max (not true peak)" status={lufs.samplePeak > -1 ? 'fail' : 'pass'} />
                 <MetricCard label="LRA" value={`${lufs.lra.toFixed(1)} LU`} subtext="Loudness Range" status="info" />
                 <MetricCard label="Short-Term Max" value={lufs.shortTerm.length > 0 ? `${Math.max(...lufs.shortTerm.filter(isFinite)).toFixed(1)}` : '—'} subtext="LUFS (3s window)" status="neutral" />
                 <MetricCard label="Momentary Max" value={momentaryMax !== null && isFinite(momentaryMax) ? `${momentaryMax.toFixed(1)}` : '—'} subtext="LUFS (400ms window)" status="neutral" />
@@ -100,7 +100,7 @@ const LufsMeter = () => {
 
               <div>
                 <h3 className="text-sm font-heading font-semibold mb-2">Platform Compliance</h3>
-                <ComplianceBadge integratedLufs={lufs.integrated} truePeakDb={lufs.truePeak} />
+                <ComplianceBadge integratedLufs={lufs.integrated} samplePeakDb={lufs.samplePeak} />
               </div>
             </>
           )}

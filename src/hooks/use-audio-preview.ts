@@ -231,7 +231,25 @@ export function useAudioPreview(file: File | null): UseAudioPreviewReturn {
 
   const seekTo = useCallback((time: number) => {
     setCurrentTime(time);
-  }, []);
+    if (sourceRef.current && audioBuffer) {
+      // AudioBufferSourceNode is not seekable; restart from new position
+      const wasPlaying = true; // seekTo is only called during active playback
+      stop();
+      const ctx = getCtx();
+      const source = ctx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(ctx.destination);
+      const endSec = audioBuffer.duration;
+      source.onended = () => {
+        setIsPlaying(false);
+        cancelAnimationFrame(rafRef.current);
+      };
+      source.start(0, time, endSec - time);
+      sourceRef.current = source;
+      if (wasPlaying) setIsPlaying(true);
+      startTimeTracking(ctx, time, endSec);
+    }
+  }, [audioBuffer, stop, getCtx, startTimeTracking]);
 
   return {
     audioBuffer,

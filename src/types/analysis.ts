@@ -35,7 +35,7 @@ export interface LUFSResult extends AnalysisResult {
   integrated: number;
   shortTerm: number[];
   momentary: number[];
-  truePeak: number;
+  samplePeak: number;
   lra: number;
 }
 

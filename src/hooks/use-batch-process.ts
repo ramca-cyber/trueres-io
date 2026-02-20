@@ -24,6 +24,8 @@ export function useBatchProcess() {
   const [engineLoading, setEngineLoading] = useState(false);
   const [engineError, setEngineError] = useState<string | null>(null);
   const abortRef = useRef(false);
+  const queueRef = useRef<BatchItem[]>([]);
+  queueRef.current = queue;
 
   const addFiles = useCallback((files: File[]) => {
     setQueue(prev => [
@@ -71,12 +73,12 @@ export function useBatchProcess() {
     }
     setEngineLoading(false);
 
-    // Process files sequentially
-    for (let i = 0; i < queue.length; i++) {
+    // Process files sequentially — read queueRef so files added during processing are included
+    for (let i = 0; i < queueRef.current.length; i++) {
       if (abortRef.current) break;
-      if (queue[i].status === 'done') continue;
+      if (queueRef.current[i].status === 'done') continue;
 
-      const item = queue[i];
+      const item = queueRef.current[i];
       const job = buildJob(item.file);
 
       setQueue(prev => prev.map((it, idx) =>
@@ -108,7 +110,7 @@ export function useBatchProcess() {
     }
 
     setIsProcessing(false);
-  }, [isProcessing, queue]);
+  }, [isProcessing]);
 
   const retryItem = useCallback(async (index: number, buildJob: (file: File) => BatchJob) => {
     const item = queue[index];

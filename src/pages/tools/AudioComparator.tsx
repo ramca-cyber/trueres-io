@@ -84,7 +84,7 @@ const AudioComparator = () => {
           {rawFile && <AudioPlayer src={rawFile} label="Preview" />}
           <div className="grid grid-cols-2 gap-2">
             <MetricCard label="LUFS" value={`${data.lufs.integrated.toFixed(1)}`} />
-            <MetricCard label="True Peak" value={`${data.lufs.truePeak.toFixed(1)} dBTP`} />
+            <MetricCard label="Sample Peak" value={`${data.lufs.samplePeak.toFixed(1)} dBFS`} />
             <MetricCard label="DR Score" value={`DR${data.dr.drScore}`} />
             <MetricCard label="Freq Ceiling" value={`${(data.bw.frequencyCeiling / 1000).toFixed(1)} kHz`} />
           </div>
@@ -123,10 +123,10 @@ const AudioComparator = () => {
             <div className="text-center font-mono">DR{fileB.dr.drScore}</div>
             <div className="text-center font-mono text-xs">{deltaCell(fileA.dr.drScore, fileB.dr.drScore, '', true)}</div>
 
-            <div className="text-muted-foreground">True Peak</div>
-            <div className="text-center font-mono">{fileA.lufs.truePeak.toFixed(1)} dBTP</div>
-            <div className="text-center font-mono">{fileB.lufs.truePeak.toFixed(1)} dBTP</div>
-            <div className="text-center font-mono text-xs">{deltaCell(fileA.lufs.truePeak, fileB.lufs.truePeak, 'dB', false)}</div>
+            <div className="text-muted-foreground">Sample Peak</div>
+            <div className="text-center font-mono">{fileA.lufs.samplePeak.toFixed(1)} dBFS</div>
+            <div className="text-center font-mono">{fileB.lufs.samplePeak.toFixed(1)} dBFS</div>
+            <div className="text-center font-mono text-xs">{deltaCell(fileA.lufs.samplePeak, fileB.lufs.samplePeak, 'dB', false)}</div>
 
             <div className="text-muted-foreground">Freq Ceiling</div>
             <div className="text-center font-mono">{(fileA.bw.frequencyCeiling / 1000).toFixed(1)} kHz</div>

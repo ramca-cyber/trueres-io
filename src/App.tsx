@@ -4,10 +4,11 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useEffect } from "react";
 import { AppShell } from "@/components/layout/AppShell";
 import { ErrorBoundary } from "@/components/shared/ErrorBoundary";
 import { Skeleton } from "@/components/ui/skeleton";
+import { terminateWorker } from "@/engines/analysis/worker-client";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 
@@ -85,7 +86,12 @@ const Loading = () => (
   </div>
 );
 
-const App = () => (
+const App = () => {
+  useEffect(() => {
+    return () => { terminateWorker(); };
+  }, []);
+
+  return (
   <HelmetProvider>
     <>
       <TooltipProvider>
@@ -178,6 +184,7 @@ const App = () => (
       </TooltipProvider>
     </>
   </HelmetProvider>
-);
+  );
+};
 
 export default App;

@@ -98,7 +98,7 @@ export function detectLossy(
     }
   }
 
-  const isLossy = spectralHoles > 3 || encoderFingerprint !== null;
+  const isLossy = spectralHoles > 5 || encoderFingerprint !== null;
   const confidence = Math.min(100, Math.round(
     (spectralHoles * 15) + (encoderFingerprint ? 40 : 0) + (frameCount > 50 ? 20 : frameCount * 0.4)
   ));

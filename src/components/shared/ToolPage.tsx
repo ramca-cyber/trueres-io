@@ -16,10 +16,12 @@ export function ToolPage({ tool, children, faq: faqProp }: ToolPageProps) {
   const faq = faqProp || getToolFAQ(tool.id);
   const resetFFmpeg = useFFmpegStore((s) => s.reset);
 
-  // Reset FFmpeg state when switching tools (audio PCM is preserved across tools)
+  // Reset FFmpeg state only when switching to a processing tool that uses FFmpeg
   useEffect(() => {
-    resetFFmpeg();
-  }, [tool.id, resetFFmpeg]);
+    if (tool.engine === 'ffmpeg') {
+      resetFFmpeg();
+    }
+  }, [tool.id, tool.engine, resetFFmpeg]);
 
   // JSON-LD: WebApplication
   const webAppSchema = {
@@ -104,8 +106,8 @@ export function ToolPage({ tool, children, faq: faqProp }: ToolPageProps) {
           <section className="space-y-4 pt-4 border-t border-border" aria-label="Frequently asked questions">
             <h2 className="text-lg font-heading font-semibold">Frequently Asked Questions</h2>
             <dl className="space-y-3">
-              {faq.map((item, i) => (
-                <div key={i}>
+              {faq.map((item) => (
+                <div key={item.q}>
                   <dt className="font-medium text-sm">{item.q}</dt>
                   <dd className="text-sm text-muted-foreground mt-0.5">{item.a}</dd>
                 </div>

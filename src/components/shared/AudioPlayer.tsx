@@ -48,10 +48,17 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       return () => URL.revokeObjectURL(objectUrl);
     }, [src]);
 
-    // Initialize Web Audio graph — only once per <audio> element mount
+    // Build (or rebuild) Web Audio graph whenever the src URL changes
     useEffect(() => {
       const el = innerRef.current;
-      if (!el || sourceRef.current) return; // already connected
+      if (!el || !url) return;
+
+      // Tear down previous graph
+      if (ctxRef.current) {
+        ctxRef.current.close().catch(() => {});
+        ctxRef.current = null;
+        sourceRef.current = null;
+      }
 
       const ctx = new AudioContext();
       const source = ctx.createMediaElementSource(el);
@@ -59,20 +66,21 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       const bassFilter = ctx.createBiquadFilter();
       bassFilter.type = 'lowshelf';
       bassFilter.frequency.value = 250;
-      bassFilter.gain.value = 0;
+      bassFilter.gain.value = bass;
 
       const midFilter = ctx.createBiquadFilter();
       midFilter.type = 'peaking';
       midFilter.frequency.value = 1000;
       midFilter.Q.value = 1;
-      midFilter.gain.value = 0;
+      midFilter.gain.value = mid;
 
       const trebleFilter = ctx.createBiquadFilter();
       trebleFilter.type = 'highshelf';
       trebleFilter.frequency.value = 4000;
-      trebleFilter.gain.value = 0;
+      trebleFilter.gain.value = treble;
 
       const gain = ctx.createGain();
+      gain.gain.value = muted ? 0 : volume;
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
 
@@ -92,7 +100,7 @@ export const AudioPlayer = forwardRef<HTMLAudioElement, AudioPlayerProps>(
       analyserRef.current = analyser;
 
       onAnalyserReady?.(analyser);
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [url]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Register with playback manager & close AudioContext on unmount
     useEffect(() => {

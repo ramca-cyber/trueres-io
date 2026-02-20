@@ -1,6 +1,7 @@
-import { useCallback, useState, useRef } from 'react';
+import React, { useCallback, useState, useRef } from 'react';
 import { Upload, AlertTriangle } from 'lucide-react';
 import { formatFileSize, FILE_SIZE_WARN_BYTES, FILE_SIZE_LIMIT_DESKTOP_BYTES, FILE_SIZE_LIMIT_MOBILE_BYTES } from '@/config/constants';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface FileDropZoneProps {
   accept?: string;
@@ -27,7 +28,7 @@ export function FileDropZone({
   const [warning, setWarning] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const isMobile = useIsMobile();
   const maxBytes = isMobile ? FILE_SIZE_LIMIT_MOBILE_BYTES : FILE_SIZE_LIMIT_DESKTOP_BYTES;
 
   const validateAndSelect = useCallback(

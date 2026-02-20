@@ -2,13 +2,13 @@ import { PLATFORM_TARGETS } from '@/config/constants';
 
 interface ComplianceBadgeProps {
   integratedLufs: number;
-  truePeakDb: number;
+  samplePeakDb: number;
 }
 
-export function ComplianceBadge({ integratedLufs, truePeakDb }: ComplianceBadgeProps) {
+export function ComplianceBadge({ integratedLufs, samplePeakDb }: ComplianceBadgeProps) {
   const platforms = Object.entries(PLATFORM_TARGETS).map(([name, target]) => {
     const lufsOk = integratedLufs <= target.lufs + 1 && integratedLufs >= target.lufs - 3;
-    const peakOk = truePeakDb <= target.truePeak;
+    const peakOk = samplePeakDb <= target.truePeak;
     const pass = lufsOk && peakOk;
 
     return { name, target, lufsOk, peakOk, pass };

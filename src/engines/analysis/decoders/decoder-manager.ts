@@ -39,6 +39,16 @@ export function parseHeader(buffer: ArrayBuffer, fileName: string): HeaderParseR
   }
 }
 
+// Shared AudioContext for decoding — avoids hitting the browser's concurrent context limit
+let sharedDecodeCtx: AudioContext | null = null;
+
+function getDecodeCtx(): AudioContext {
+  if (!sharedDecodeCtx || sharedDecodeCtx.state === 'closed') {
+    sharedDecodeCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  }
+  return sharedDecodeCtx;
+}
+
 /**
  * Decode audio to PCM using Web Audio API (tier 1)
  */
@@ -48,28 +58,24 @@ export async function decodeAudio(
 ): Promise<PCMData> {
   onProgress?.(10);
 
-  const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+  const audioCtx = getDecodeCtx();
 
-  try {
-    onProgress?.(30);
-    const audioBuffer = await audioCtx.decodeAudioData(buffer.slice(0));
-    onProgress?.(80);
+  onProgress?.(30);
+  const audioBuffer = await audioCtx.decodeAudioData(buffer.slice(0));
+  onProgress?.(80);
 
-    const channelData: Float32Array[] = [];
-    for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
-      channelData.push(audioBuffer.getChannelData(ch));
-    }
-
-    onProgress?.(100);
-
-    return {
-      channelData,
-      sampleRate: audioBuffer.sampleRate,
-      numberOfChannels: audioBuffer.numberOfChannels,
-      length: audioBuffer.length,
-      duration: audioBuffer.duration,
-    };
-  } finally {
-    await audioCtx.close();
+  const channelData: Float32Array[] = [];
+  for (let ch = 0; ch < audioBuffer.numberOfChannels; ch++) {
+    channelData.push(audioBuffer.getChannelData(ch));
   }
+
+  onProgress?.(100);
+
+  return {
+    channelData,
+    sampleRate: audioBuffer.sampleRate,
+    numberOfChannels: audioBuffer.numberOfChannels,
+    length: audioBuffer.length,
+    duration: audioBuffer.duration,
+  };
 }

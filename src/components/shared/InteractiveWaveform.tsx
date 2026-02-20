@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { computeWaveform } from '@/engines/analysis/modules/waveform';
 
 interface InteractiveWaveformProps {
@@ -66,39 +66,30 @@ export const InteractiveWaveform = ({
     return () => obs.disconnect();
   }, []);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Only respond when our container or canvas is focused
-      if (!containerRef.current?.contains(document.activeElement)) return;
-
-      if (e.code === 'Space') {
-        e.preventDefault();
-        onTogglePlay?.();
-      } else if (e.code === 'ArrowLeft') {
-        e.preventDefault();
-        const step = e.shiftKey ? 1 : 0.1;
-        if (lastHandle === 'start') {
-          onStartChange(Math.max(0, startTime - step));
-        } else {
-          onEndChange(Math.max(startTime + 0.1, endTime - step));
-        }
-      } else if (e.code === 'ArrowRight') {
-        e.preventDefault();
-        const step = e.shiftKey ? 1 : 0.1;
-        if (lastHandle === 'start') {
-          onStartChange(Math.min(endTime - 0.1, startTime + step));
-        } else {
-          onEndChange(Math.min(duration, endTime + step));
-        }
-      } else if (e.code === 'Tab') {
-        e.preventDefault();
-        setLastHandle(prev => prev === 'start' ? 'end' : 'start');
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.code === 'Space') {
+      e.preventDefault();
+      onTogglePlay?.();
+    } else if (e.code === 'ArrowLeft') {
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 0.1;
+      if (lastHandle === 'start') {
+        onStartChange(Math.max(0, startTime - step));
+      } else {
+        onEndChange(Math.max(startTime + 0.1, endTime - step));
       }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    } else if (e.code === 'ArrowRight') {
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 0.1;
+      if (lastHandle === 'start') {
+        onStartChange(Math.min(endTime - 0.1, startTime + step));
+      } else {
+        onEndChange(Math.min(duration, endTime + step));
+      }
+    } else if (e.code === 'Tab') {
+      e.preventDefault();
+      setLastHandle(prev => prev === 'start' ? 'end' : 'start');
+    }
   }, [startTime, endTime, duration, lastHandle, onStartChange, onEndChange, onTogglePlay]);
 
   // Draw
@@ -240,7 +231,11 @@ export const InteractiveWaveform = ({
   const cursorClass = dragging || hovering ? 'cursor-ew-resize' : 'cursor-crosshair';
 
   return (
-    <div ref={containerRef} className={className} tabIndex={0}>
+    <div ref={containerRef} className={className} tabIndex={0} onKeyDown={handleKeyDown}
+      aria-label="Waveform editor. Tab to switch handle, arrow keys to nudge, Space to play."
+      style={{ outline: 'none' }}
+      onFocus={e => (e.currentTarget.style.boxShadow = '0 0 0 2px hsl(30,83%,63%)')}
+      onBlur={e => (e.currentTarget.style.boxShadow = '')}>
       <canvas
         ref={canvasRef}
         className={`w-full rounded-md border border-border ${cursorClass}`}

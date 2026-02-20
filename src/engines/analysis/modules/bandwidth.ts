@@ -155,7 +155,7 @@ export function analyzeBandwidth(
     }
   }
 
-  const confidence = Math.min(100, Math.round(frameCount / 2 * 10));
+  const confidence = Math.min(100, Math.round((frameCount / 50) * 100));
 
   return {
     type: 'bandwidth',

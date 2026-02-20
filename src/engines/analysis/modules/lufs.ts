@@ -110,15 +110,15 @@ export function measureLUFS(
     );
   }
 
-  // Sample peak (per-sample max, not ITU-R BS.1770 true peak which requires 4x oversampling)
-  let truePeak = 0;
+  // Sample peak (per-sample max — not ITU-R BS.1770 true peak, which requires 4x oversampling)
+  let samplePeakLin = 0;
   for (let ch = 0; ch < numChannels; ch++) {
     for (let i = 0; i < channelData[ch].length; i++) {
       const abs = Math.abs(channelData[ch][i]);
-      if (abs > truePeak) truePeak = abs;
+      if (abs > samplePeakLin) samplePeakLin = abs;
     }
   }
-  const truePeakDb = truePeak > 0 ? 20 * Math.log10(truePeak) : -Infinity;
+  const samplePeakDb = samplePeakLin > 0 ? 20 * Math.log10(samplePeakLin) : -Infinity;
 
   // LRA (Loudness Range)
   const validShortTerm = shortTerm.filter((v) => isFinite(v) && v > -70);
@@ -135,7 +135,7 @@ export function measureLUFS(
     integrated,
     shortTerm,
     momentary,
-    truePeak: truePeakDb,
+    samplePeak: samplePeakDb,
     lra,
   };
 }

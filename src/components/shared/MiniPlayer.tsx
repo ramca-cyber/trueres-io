@@ -12,6 +12,7 @@ export function MiniPlayer() {
   const { active, queue, currentIndex, isPlaying, currentTime, duration, deactivate, setPlaying, setCurrentIndex, setTime } = useMiniPlayerStore();
   const navigate = useNavigate();
   const audioRef = useRef<HTMLAudioElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState('');
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
@@ -21,6 +22,10 @@ export function MiniPlayer() {
   const [seekValue, setSeekValue] = useState(0);
 
   const current = queue[currentIndex];
+
+  const getMediaEl = useCallback(() =>
+    current?.isVideo ? videoRef.current : audioRef.current
+  , [current?.isVideo]);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -36,24 +41,25 @@ export function MiniPlayer() {
   }, [current?.playbackSrc, current?.id]);
 
   useEffect(() => {
-    const el = audioRef.current;
+    const el = getMediaEl();
     if (!el || !url) return;
     if (isPlaying) el.play().catch(() => {});
     else el.pause();
-  }, [isPlaying, url]);
+  }, [isPlaying, url, getMediaEl]);
 
   useEffect(() => {
-    if (audioRef.current) audioRef.current.volume = muted ? 0 : volume;
-  }, [volume, muted]);
+    const el = getMediaEl();
+    if (el) el.volume = muted ? 0 : volume;
+  }, [volume, muted, getMediaEl]);
 
   useEffect(() => {
-    const el = audioRef.current;
+    const el = getMediaEl();
     if (!el) return;
     const onTime = () => {
       if (!seeking) setTime(el.currentTime, el.duration || 0);
     };
     const onEnded = () => {
-      if (loop) { el.currentTime = 0; el.play(); return; }
+      if (loop) { el.currentTime = 0; el.play().catch(() => {}); return; }
       let next: number;
       if (shuffle) {
         const remaining = Array.from({ length: queue.length }, (_, i) => i).filter(i => i !== currentIndex);
@@ -76,7 +82,7 @@ export function MiniPlayer() {
       el.removeEventListener('play', onPlay);
       el.removeEventListener('pause', onPause);
     };
-  }, [currentIndex, queue.length, setTime, setCurrentIndex, setPlaying, seeking, shuffle, loop]);
+  }, [currentIndex, queue.length, setTime, setCurrentIndex, setPlaying, seeking, shuffle, loop, getMediaEl]);
 
   const handleSeekChange = useCallback(([v]: number[]) => {
     setSeeking(true);
@@ -84,11 +90,12 @@ export function MiniPlayer() {
   }, []);
 
   const handleSeekCommit = useCallback(([v]: number[]) => {
-    if (audioRef.current && duration > 0) {
-      audioRef.current.currentTime = (v / 100) * duration;
+    const el = getMediaEl();
+    if (el && duration > 0) {
+      el.currentTime = (v / 100) * duration;
     }
     setSeeking(false);
-  }, [duration]);
+  }, [duration, getMediaEl]);
 
   if (!active || !current) return null;
 
@@ -169,6 +176,9 @@ export function MiniPlayer() {
 
         {url && !current.isVideo && (
           <audio ref={audioRef} src={url} preload="auto" className="hidden" />
+        )}
+        {url && current.isVideo && (
+          <video ref={videoRef} src={url} preload="auto" className="hidden" />
         )}
       </div>
     </div>

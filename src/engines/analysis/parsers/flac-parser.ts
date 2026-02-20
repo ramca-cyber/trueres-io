@@ -33,7 +33,7 @@ export function parseFlac(buffer: ArrayBuffer): HeaderParseResult {
 
   const sampleRate = (b10 << 12) | (b11 << 4) | (b12 >> 4);
   const channels = ((b12 >> 1) & 0x07) + 1;
-  const bitDepth = ((b12 & 0x01) << 4) | (b13 >> 4) + 1;
+  const bitDepth = (((b12 & 0x01) << 4) | (b13 >> 4)) + 1;
   const totalSamples = ((b13 & 0x0F) * 2 ** 32) + (b14 << 24) + (b15 << 16) + (b16 << 8) + b17;
 
   const duration = sampleRate > 0 ? totalSamples / sampleRate : 0;

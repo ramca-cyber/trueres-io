@@ -84,14 +84,30 @@ export function Header() {
               </Link>
             </div>
             <div className="p-4">
-              <Input
-                placeholder="Search tools..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="mb-4 bg-secondary"
-              />
+              <div className="relative">
+                <Input
+                  placeholder="Search tools..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="mb-1 bg-secondary"
+                />
+                {searchQuery.length >= 2 && searchResults.length > 0 && (
+                  <div className="mb-3 rounded-md border border-border bg-card shadow-lg">
+                    {searchResults.slice(0, 8).map((tool) => (
+                      <button
+                        key={tool.id}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-secondary text-left"
+                        onClick={() => { handleSearchSelect(tool.route); setMobileNavOpen(false); }}
+                      >
+                        <span className="font-medium">{tool.shortName}</span>
+                        <span className="text-muted-foreground text-xs truncate">{tool.description.slice(0, 50)}...</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <ToolNav onNavigate={() => setMobileNavOpen(false)} />
+            <ToolNav onNavigate={() => { setMobileNavOpen(false); setSearchQuery(''); }} />
           </SheetContent>
         </Sheet>
       </div>
