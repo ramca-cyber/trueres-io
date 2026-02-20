@@ -166,7 +166,7 @@ const AudioConverter = () => {
               {(processing || loading || preparing) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {preparing ? 'Preparing...' : loading ? 'Loading engine...' : processing ? 'Converting...' : 'Convert'}
             </Button>
-            <Button variant="outline" onClick={handleClear}>Choose different file</Button>
+            <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleClear}>Choose different file</Button>
           </div>
           {outputBlob && (
             <div className="rounded-lg border border-border bg-card p-4 space-y-3">

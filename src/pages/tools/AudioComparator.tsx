@@ -137,9 +137,9 @@ const AudioComparator = () => {
       )}
 
       {(fileA || fileB) && (
-        <div className="mt-3">
-          <Button variant="outline" size="sm" onClick={reset}>
-            <RotateCcw className="h-4 w-4 mr-1" /> Compare different files
+        <div className="flex justify-end mt-3">
+          <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={reset}>
+            <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Compare different files
           </Button>
         </div>
       )}

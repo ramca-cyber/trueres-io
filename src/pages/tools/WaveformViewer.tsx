@@ -100,8 +100,8 @@ const WaveformViewer = () => {
           </div>
         )}
 
-        <div className="flex justify-center">
-          <Button variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 px-8" onClick={() => useAudioStore.getState().clear()}>
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => useAudioStore.getState().clear()}>
             Analyze another file
           </Button>
         </div>

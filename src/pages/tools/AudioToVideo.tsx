@@ -205,7 +205,7 @@ const AudioToVideo = () => {
                 {preparing ? 'Preparing...' : loading ? 'Loading engine...' : 'Generate Video'}
               </Button>
             )}
-            <Button variant="outline" onClick={handleClear}>
+            <Button variant="outline" size="sm" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={handleClear}>
               Choose different file
             </Button>
           </div>
