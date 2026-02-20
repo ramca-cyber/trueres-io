@@ -1,33 +1,105 @@
 
-# Fix: Playback Interruption on Navigation + Waveform Not Full-Width
 
-## Issue 1: Playback stops / restarts from beginning when navigating away
+# Unified Playback Engine -- Single Shared Media Element
 
-**Root cause**: The MediaPlayer and MiniPlayer each create their own separate `<audio>` element. When you leave `/media-player`, the MediaPlayer's audio element is destroyed. The MiniPlayer creates a new one and loads the blob -- but it never seeks to the stored `currentTime`. It just starts from 0.
+## Goal
+Eliminate the two-element handoff entirely. One `<audio>` element and one `<video>` element live permanently in the AppShell. Both the full Media Player page and the Mini Player are pure UI skins controlling the same underlying elements. Navigation causes zero interruption -- not even a sub-100ms seek gap.
 
-**Fix**: In `MiniPlayer.tsx`, after the new media element loads its source, seek it to `store.currentTime` before playing. Add a `loadeddata` listener that sets `el.currentTime = store.currentTime` on the first load.
+## Architecture
 
-### File: `src/components/shared/MiniPlayer.tsx`
-- In the effect that reacts to `isPlaying` and `url` changes (lines 45-50), add logic to seek to the store's `currentTime` before calling `play()`.
-- Specifically: listen for `loadeddata` on the element, then set `el.currentTime = store.getState().currentTime` once, then play if `isPlaying` is true.
-- Also ensure `store.setPlaying(true)` is called in the MediaPlayer's `handleMinimize` so the MiniPlayer knows to auto-play.
+A new `PlaybackEngine` component is rendered in `AppShell` alongside the existing `MiniPlayer`. It owns:
+- A single `<audio>` element (hidden, always mounted)
+- A single `<video>` element (hidden by default, portaled into the Media Player page when visible)
+- The Web Audio graph (EQ filters, gain, analyser) -- built once, persists forever
+- All playback event listeners (timeupdate, ended, play, pause)
 
----
+A React context (`PlaybackContext`) exposes the element refs, the analyser node, and control functions to any consumer.
 
-## Issue 2: Waveform not using full width
+## What Changes
 
-**Root cause**: `WaveformSeekbar` has an early return on line 187: `if (!audioElement) return null`. This means the container `<div ref={containerRef}>` is never rendered on the first pass. The ResizeObserver effect (lines 34-45) runs with `[]` deps, finds `containerRef.current === null`, and exits. When `audioElement` later becomes available and the component re-renders with the container div, the effect does NOT re-run because its dependency array is empty. So `canvasWidth` stays at the default `600`.
+### 1. New file: `src/components/shared/PlaybackEngine.tsx`
+- Renders hidden `<audio>` and `<video>` elements
+- Creates the Web Audio graph (3-band EQ, GainNode, AnalyserNode) on first audio play
+- Listens to store changes (queue, currentIndex) and updates `element.src` accordingly
+- Handles `timeupdate` -> `store.setTime()`, `ended` -> advance logic, `play/pause` -> `store.setPlaying()`
+- Manages object URL lifecycle (create/revoke as tracks change)
+- Registers with the playback manager
 
-**Fix**: Add `audioElement` (or a boolean derived from it) to the ResizeObserver effect's dependency array so it re-runs when the component transitions from returning `null` to rendering the actual container.
+### 2. New file: `src/context/PlaybackContext.tsx`
+- React context providing:
+  - `audioRef: RefObject<HTMLAudioElement>`
+  - `videoRef: RefObject<HTMLVideoElement>`
+  - `analyserNode: AnalyserNode | null`
+  - `videoPortalTarget: HTMLDivElement | null` + `setVideoPortalTarget(el)`
+- The MediaPlayer calls `setVideoPortalTarget(myContainerDiv)` on mount, clears it on unmount
+- The PlaybackEngine uses a React portal to render the `<video>` into this target when set, otherwise keeps it hidden
 
-### File: `src/components/shared/WaveformSeekbar.tsx`
-- Change the ResizeObserver effect deps from `[]` to include a trigger that fires when the container first renders. The simplest approach: use a state or check -- add a dependency that changes when `audioElement` goes from null to non-null. For example, change deps to `[!!audioElement]` so the effect re-runs when audioElement becomes available and the container div actually mounts.
+### 3. Update: `src/components/layout/AppShell.tsx`
+- Wrap children with `PlaybackProvider`
+- Add `<PlaybackEngine />` next to `<MiniPlayer />`
 
----
+### 4. Update: `src/components/shared/MiniPlayer.tsx`
+- Remove its own `<audio>` and `<video>` elements entirely
+- Remove all object URL creation, event listeners, and seek logic
+- Read `currentTime`, `duration`, `isPlaying` directly from the store (already does this)
+- For play/pause: call `audioRef.current.play()` / `.pause()` via context
+- For seeking: set `audioRef.current.currentTime` via context
+- Becomes a thin ~80-line UI-only component
 
-## Technical Summary
+### 5. Update: `src/pages/tools/MediaPlayer.tsx`
+- Remove `<AudioPlayer>` and `<VideoPlayer>` component usage
+- Instead, use context to get `audioRef`, `videoRef`, `analyserNode`
+- On mount: call `setVideoPortalTarget(containerRef.current)` so the shared video element appears inside the player area
+- On unmount: clear the portal target (video goes back to hidden)
+- Volume, speed, EQ controls directly manipulate the shared Web Audio nodes via context
+- The `WaveformSeekbar`, `LiveSpectrum`, `LiveSpectrogram` receive the shared `audioRef.current` and `analyserNode` -- no change needed in those components
 
-| File | Change |
+### 6. Unchanged files
+- `src/components/shared/WaveformSeekbar.tsx` -- already takes `audioElement` as prop
+- `src/components/shared/LiveSpectrum.tsx` -- already takes `analyserNode` as prop
+- `src/components/shared/LiveSpectrogram.tsx` -- same
+- `src/stores/mini-player-store.ts` -- already has all needed state
+
+## Video Portal Pattern
+
+When on the Media Player page:
+```text
+AppShell
+  +-- PlaybackEngine
+  |     audio (hidden, always here)
+  |     video --> portaled into MediaPlayer's container
+  +-- MediaPlayer
+        [video-container div] <-- video appears here via React portal
+        WaveformSeekbar
+        LiveSpectrum
+        Transport controls
+  +-- MiniPlayer (hidden, route is /media-player)
+```
+
+When on any other page:
+```text
+AppShell
+  +-- PlaybackEngine
+  |     audio (hidden, keeps playing)
+  |     video (hidden, keeps playing if video track)
+  +-- SomeOtherTool
+  +-- MiniPlayer (visible, shows transport controls)
+```
+
+## Technical Notes
+
+- **Web Audio "one source" rule**: `createMediaElementSource()` can only be called once per element. Since the element now lives forever, the graph is created once and never torn down -- this is actually simpler and more correct than the current approach.
+- **Object URLs**: Managed in PlaybackEngine only. Created when `currentIndex` changes, revoked when replaced or on deactivate.
+- **EQ state**: Already in the Zustand store (`bass`, `mid`, `treble` can be added as needed, or kept as context-local state in PlaybackEngine since they're audio-graph-specific).
+- **Crossfade/gapless**: The pre-buffer logic stays in PlaybackEngine (or MediaPlayer) since it's an advanced feature. The secondary pre-buffer audio element is separate from the main shared one.
+
+## Files Summary
+
+| File | Action |
 |------|--------|
-| `src/components/shared/MiniPlayer.tsx` | Seek to `store.currentTime` when loading a new source, before playing |
-| `src/components/shared/WaveformSeekbar.tsx` | Add `!!audioElement` to ResizeObserver effect deps so it runs after the container actually mounts |
+| `src/components/shared/PlaybackEngine.tsx` | **New** -- shared media elements + Web Audio graph |
+| `src/context/PlaybackContext.tsx` | **New** -- context for refs and controls |
+| `src/components/layout/AppShell.tsx` | **Edit** -- add provider + engine |
+| `src/components/shared/MiniPlayer.tsx` | **Edit** -- strip to UI-only, use context |
+| `src/pages/tools/MediaPlayer.tsx` | **Edit** -- remove AudioPlayer/VideoPlayer, use context + portal |
+
