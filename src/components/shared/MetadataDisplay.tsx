@@ -70,8 +70,6 @@ export function MetadataDisplay({ file, className, compact = false }: MetadataDi
 
   const hasInfo = metadata && (metadata.title || metadata.artist || metadata.album);
 
-  if (!hasInfo && !coverUrl) return null;
-
   if (compact) {
     return (
       <div className={cn('flex items-center gap-3 min-w-0', className)}>
