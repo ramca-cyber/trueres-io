@@ -25,7 +25,7 @@ import {
   Waves,
 } from 'lucide-react';
 import { processFile, getFFmpeg } from '@/engines/processing/ffmpeg-manager';
-import { useMiniPlayerStore } from '@/stores/mini-player-store';
+import { useMiniPlayerStore, type LoopMode } from '@/stores/mini-player-store';
 import { cn } from '@/lib/utils';
 
 const tool = getToolById('media-player')!;
@@ -84,8 +84,6 @@ async function extractAudio(
   ], onProgress);
 }
 
-type LoopMode = 'off' | 'one' | 'all';
-
 function fisherYatesShuffle(length: number): number[] {
   const arr = Array.from({ length }, (_, i) => i);
   for (let i = arr.length - 1; i > 0; i--) {
@@ -124,21 +122,34 @@ function generateM3U(queue: QueueItem[]): string {
 }
 
 export default function MediaPlayer() {
-  const [queue, setQueue] = useState<QueueItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [shuffleOn, setShuffleOn] = useState(false);
-  const [shuffleOrder, setShuffleOrder] = useState<number[]>([]);
-  const [loopMode, setLoopMode] = useState<LoopMode>('off');
+  // ── Global playback state from store ──
+  const store = useMiniPlayerStore();
+  const queue = store.queue;
+  const currentIndex = store.currentIndex;
+  const shuffleOn = store.shuffle;
+  const shuffleOrder = store.shuffleOrder;
+  const loopMode = store.loopMode;
+  const crossfadeSec = store.crossfadeSec;
+  const sleepMode = store.sleepMode;
+  const audioOnlyMode = store.audioOnlyMode;
+  const showSpectrum = store.showSpectrum;
+  const showSpectrogram = store.showSpectrogram;
+
+  const setQueue = store.setQueue;
+  const setCurrentIndex = store.setCurrentIndex;
+  const setShuffleOn = store.setShuffle;
+  const setShuffleOrder = store.setShuffleOrder;
+  const setLoopMode = store.setLoopMode;
+  const setCrossfadeSec = store.setCrossfadeSec;
+  const setSleepMode = store.setSleepMode;
+  const setAudioOnlyMode = store.setAudioOnlyMode;
+  const setShowSpectrum = store.setShowSpectrum;
+  const setShowSpectrogram = store.setShowSpectrogram;
+
+  // ── Local-only UI state ──
   const [autoPlay, setAutoPlay] = useState(false);
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
-  const [showSpectrum, setShowSpectrum] = useState(true);
-  const [showSpectrogram, setShowSpectrogram] = useState(false);
-
-  // Phase 3 state
-  const [crossfadeSec, setCrossfadeSec] = useState(0);
-  const [sleepMode, setSleepMode] = useState(0);
   const [sleepRemaining, setSleepRemaining] = useState(0);
-  const [audioOnlyMode, setAudioOnlyMode] = useState(false);
   const [extractingAudio, setExtractingAudio] = useState(false);
   const [extractProgress, setExtractProgress] = useState(-1);
 
@@ -153,8 +164,24 @@ export default function MediaPlayer() {
   const playlistInputRef = useRef<HTMLInputElement>(null);
   const sleepTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const miniPlayer = useMiniPlayerStore();
   const current = queue[currentIndex] as QueueItem | undefined;
+
+  // ── Mark store active when we have a queue ──
+  useEffect(() => {
+    if (queue.length > 0 && !store.active) {
+      store.activate(queue, currentIndex);
+    }
+  }, [queue.length]);
+
+  // ── On mount: if store has a session, auto-play from stored position ──
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+    if (store.active && store.isPlaying) {
+      setAutoPlay(true);
+    }
+  }, []);
 
   // ── Sleep timer logic ──
   useEffect(() => {
@@ -186,16 +213,16 @@ export default function MediaPlayer() {
   useEffect(() => {
     if (!current || current.status !== 'pending') return;
     let cancelled = false;
-    setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'transcoding' as const, progress: -1 } : item));
+    setQueue(queue.map((item, i) => i === currentIndex ? { ...item, status: 'transcoding' as const, progress: -1 } : item));
     transcodeFile(current.file, (p) => {
       if (cancelled) return;
-      setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, progress: p } : item));
+      setQueue(store.queue.map((item, i) => i === currentIndex ? { ...item, progress: p } : item));
     }).then(result => {
       if (cancelled) return;
-      setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'ready' as const, playbackSrc: result.blob, isVideo: result.isVideo, progress: 100 } : item));
+      setQueue(store.queue.map((item, i) => i === currentIndex ? { ...item, status: 'ready' as const, playbackSrc: result.blob, isVideo: result.isVideo, progress: 100 } : item));
     }).catch(() => {
       if (cancelled) return;
-      setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'error' as const } : item));
+      setQueue(store.queue.map((item, i) => i === currentIndex ? { ...item, status: 'error' as const } : item));
     });
     return () => { cancelled = true; };
   }, [currentIndex, current?.id, current?.status]);
@@ -207,7 +234,7 @@ export default function MediaPlayer() {
     setExtractProgress(-1);
     try {
       const audioBlob = await extractAudio(current.file, setExtractProgress);
-      setQueue(q => q.map((item, i) => i === currentIndex ? {
+      setQueue(queue.map((item, i) => i === currentIndex ? {
         ...item, playbackSrc: audioBlob, isVideo: false,
       } : item));
       setAudioOnlyMode(true);
@@ -216,15 +243,15 @@ export default function MediaPlayer() {
     } finally {
       setExtractingAudio(false);
     }
-  }, [current, currentIndex]);
+  }, [current, currentIndex, queue, setQueue, setAudioOnlyMode]);
 
   const handleRestoreVideo = useCallback(() => {
     if (!current) return;
-    setQueue(q => q.map((item, i) => i === currentIndex ? {
+    setQueue(queue.map((item, i) => i === currentIndex ? {
       ...item, playbackSrc: item.file, isVideo: isVideoFile(item.file),
     } : item));
     setAudioOnlyMode(false);
-  }, [current, currentIndex]);
+  }, [current, currentIndex, queue, setQueue, setAudioOnlyMode]);
 
   useEffect(() => {
     if (shuffleOn && queue.length > 0) setShuffleOrder(fisherYatesShuffle(queue.length));
@@ -243,7 +270,6 @@ export default function MediaPlayer() {
   }, [queue.length, shuffleOn, shuffleOrder, loopMode]);
 
   // Stable reference for pre-buffer deps
-  const queueIdsRef = useRef('');
   const queueIds = useMemo(() => queue.map(q => q.id).join(','), [queue]);
 
   // ── Pre-buffer next track for gapless ──
@@ -349,49 +375,50 @@ export default function MediaPlayer() {
 
   const handleFilesSelect = useCallback((files: File[]) => {
     const items = files.map(buildQueueItem);
-    if (queue.length === 0) { setQueue(items); setCurrentIndex(0); setAutoPlay(false); }
-    else setQueue(q => [...q, ...items]);
-  }, [queue.length]);
+    if (queue.length === 0) {
+      setQueue(items);
+      setCurrentIndex(0);
+      setAutoPlay(false);
+      store.activate(items, 0);
+    } else {
+      setQueue([...queue, ...items]);
+    }
+  }, [queue, setQueue, setCurrentIndex]);
 
   const handleSingleFile = useCallback((file: File) => handleFilesSelect([file]), [handleFilesSelect]);
   const handleSelect = useCallback((index: number) => { setCurrentIndex(index); setAutoPlay(true); setAudioOnlyMode(false); }, []);
 
   const handleRemove = useCallback((index: number) => {
-    setQueue(q => { const n = [...q]; n.splice(index, 1); return n; });
-    if (index < currentIndex) setCurrentIndex(i => i - 1);
-    else if (index === currentIndex) { setCurrentIndex(i => Math.min(i, queue.length - 2)); setAutoPlay(true); }
-  }, [currentIndex, queue.length]);
+    const n = [...queue]; n.splice(index, 1);
+    setQueue(n);
+    if (index < currentIndex) setCurrentIndex(currentIndex - 1);
+    else if (index === currentIndex) { setCurrentIndex(Math.min(currentIndex, queue.length - 2)); setAutoPlay(true); }
+  }, [currentIndex, queue, setQueue, setCurrentIndex]);
 
   const handleReorder = useCallback((fromIndex: number, toIndex: number) => {
-    setQueue(q => { const n = [...q]; const [m] = n.splice(fromIndex, 1); n.splice(toIndex, 0, m); return n; });
+    const n = [...queue]; const [m] = n.splice(fromIndex, 1); n.splice(toIndex, 0, m);
+    setQueue(n);
     if (fromIndex === currentIndex) setCurrentIndex(toIndex);
-    else if (fromIndex < currentIndex && toIndex >= currentIndex) setCurrentIndex(i => i - 1);
-    else if (fromIndex > currentIndex && toIndex <= currentIndex) setCurrentIndex(i => i + 1);
-  }, [currentIndex]);
+    else if (fromIndex < currentIndex && toIndex >= currentIndex) setCurrentIndex(currentIndex - 1);
+    else if (fromIndex > currentIndex && toIndex <= currentIndex) setCurrentIndex(currentIndex + 1);
+  }, [currentIndex, queue, setQueue, setCurrentIndex]);
 
   const handleClear = useCallback(() => {
-    setQueue([]); setCurrentIndex(0); setAutoPlay(false); setShuffleOn(false); setAnalyserNode(null);
-    setSleepMode(0); setAudioOnlyMode(false);
+    store.deactivate();
+    setAutoPlay(false);
+    setAnalyserNode(null);
   }, []);
 
   const handleAddFiles = useCallback(() => fileInputRef.current?.click(), []);
-  const cycleLoop = useCallback(() => setLoopMode(m => m === 'off' ? 'all' : m === 'all' ? 'one' : 'off'), []);
+  const cycleLoop = useCallback(() => setLoopMode(loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off'), [loopMode, setLoopMode]);
 
   const handleMinimize = useCallback(() => {
+    // Just navigate away — the MiniPlayer will pick up from the store
     if (queue.length > 0) {
-      const el = audioRef.current || videoRef.current;
-      if (el) el.pause();
-      miniPlayer.activate(queue, currentIndex);
-      miniPlayer.setPlaying(true);
+      store.setPlaying(true);
+      window.history.back();
     }
-  }, [queue, currentIndex, miniPlayer]);
-
-  // Deactivate MiniPlayer when MediaPlayer mounts to prevent overlap
-  useEffect(() => {
-    if (miniPlayer.active) {
-      miniPlayer.deactivate();
-    }
-  }, []);
+  }, [queue.length]);
 
   // ── Export playlist ──
   const handleExportPlaylist = useCallback(() => {
@@ -406,8 +433,7 @@ export default function MediaPlayer() {
     URL.revokeObjectURL(url);
   }, [queue]);
 
-  // ── Import playlist (just re-triggers file picker — actual .m3u files list filenames but can't restore File objects) ──
-  // Instead, we use the import to let users re-add files
+  // ── Import playlist ──
   const handleImportPlaylist = useCallback(() => {
     playlistInputRef.current?.click();
   }, []);
@@ -514,7 +540,7 @@ export default function MediaPlayer() {
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={() => {
-                  setQueue(q => q.map((item, i) => i === currentIndex ? { ...item, status: 'pending' as const } : item));
+                  setQueue(queue.map((item, i) => i === currentIndex ? { ...item, status: 'pending' as const } : item));
                 }}><RefreshCw className="h-3.5 w-3.5 mr-1.5" /> Retry</Button>
                 <Button variant="outline" size="sm" onClick={handleNext}>
                   <SkipForward className="h-3.5 w-3.5 mr-1.5" /> Skip</Button>
@@ -555,7 +581,7 @@ export default function MediaPlayer() {
           {/* ── Transport controls ── */}
           <div className="flex items-center justify-center gap-1 flex-wrap">
             {queue.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={() => setShuffleOn(s => !s)}
+              <Button variant="ghost" size="sm" onClick={() => setShuffleOn(!shuffleOn)}
                 className={cn('h-8 w-8 p-0', shuffleOn && 'text-primary bg-primary/10')}
                 aria-label={shuffleOn ? 'Shuffle on' : 'Shuffle off'}>
                 <Shuffle className="h-4 w-4" />
@@ -585,7 +611,7 @@ export default function MediaPlayer() {
 
             {/* Spectrum toggle */}
             {isAudioTrack && current?.status === 'ready' && (
-              <Button variant="ghost" size="sm" onClick={() => setShowSpectrum(s => !s)}
+              <Button variant="ghost" size="sm" onClick={() => setShowSpectrum(!showSpectrum)}
                 className={cn('h-8 w-8 p-0', showSpectrum && 'text-primary bg-primary/10')}
                 aria-label="Toggle spectrum">
                 <BarChart3 className="h-4 w-4" />
@@ -594,7 +620,7 @@ export default function MediaPlayer() {
 
             {/* Spectrogram toggle */}
             {isAudioTrack && current?.status === 'ready' && (
-              <Button variant="ghost" size="sm" onClick={() => setShowSpectrogram(s => !s)}
+              <Button variant="ghost" size="sm" onClick={() => setShowSpectrogram(!showSpectrogram)}
                 className={cn('h-8 w-8 p-0', showSpectrogram && 'text-primary bg-primary/10')}
                 aria-label="Toggle spectrogram">
                 <Waves className="h-4 w-4" />

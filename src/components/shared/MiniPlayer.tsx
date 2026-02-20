@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useMiniPlayerStore } from '@/stores/mini-player-store';
 import { formatTime } from '@/lib/utils';
 import { Play, Pause, X, SkipForward, SkipBack, Maximize2, Music, Film, Volume2, VolumeX, Shuffle, Repeat } from 'lucide-react';
@@ -9,15 +9,17 @@ import { cn } from '@/lib/utils';
 import { register, unregister } from '@/lib/playback-manager';
 
 export function MiniPlayer() {
-  const { active, queue, currentIndex, isPlaying, currentTime, duration, deactivate, setPlaying, setCurrentIndex, setTime } = useMiniPlayerStore();
+  const store = useMiniPlayerStore();
+  const { active, queue, currentIndex, isPlaying, currentTime, duration, deactivate, setPlaying, setCurrentIndex, setTime } = store;
+  const shuffle = store.shuffle;
+  const loop = store.loopMode;
   const navigate = useNavigate();
+  const location = useLocation();
   const audioRef = useRef<HTMLAudioElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState('');
   const [volume, setVolume] = useState(1);
   const [muted, setMuted] = useState(false);
-  const [shuffle, setShuffle] = useState(false);
-  const [loop, setLoop] = useState(false);
   const [seeking, setSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
 
@@ -59,7 +61,7 @@ export function MiniPlayer() {
       if (!seeking) setTime(el.currentTime, el.duration || 0);
     };
     const onEnded = () => {
-      if (loop) { el.currentTime = 0; el.play().catch(() => {}); return; }
+      if (loop === 'one') { el.currentTime = 0; el.play().catch(() => {}); return; }
       let next: number;
       if (shuffle) {
         const remaining = Array.from({ length: queue.length }, (_, i) => i).filter(i => i !== currentIndex);
@@ -67,6 +69,7 @@ export function MiniPlayer() {
       } else {
         next = currentIndex + 1;
       }
+      if (loop === 'all' && next >= queue.length) next = 0;
       if (next < queue.length) { setCurrentIndex(next); setPlaying(true); }
       else setPlaying(false);
     };
@@ -97,6 +100,8 @@ export function MiniPlayer() {
     setSeeking(false);
   }, [duration, getMediaEl]);
 
+  // Hide on the media player page (store stays active)
+  if (location.pathname === '/media-player') return null;
   if (!active || !current) return null;
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
@@ -138,7 +143,7 @@ export function MiniPlayer() {
         <div className="flex items-center gap-0.5">
           {queue.length > 1 && (
             <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', shuffle && 'text-primary')}
-              onClick={() => setShuffle(s => !s)} aria-label="Shuffle">
+              onClick={() => store.setShuffle(!shuffle)} aria-label="Shuffle">
               <Shuffle className="h-3 w-3" />
             </Button>
           )}
@@ -160,12 +165,12 @@ export function MiniPlayer() {
               <SkipForward className="h-3.5 w-3.5" />
             </Button>
           )}
-          <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', loop && 'text-primary')}
-            onClick={() => setLoop(l => !l)} aria-label="Loop">
+          <Button variant="ghost" size="sm" className={cn('h-7 w-7 p-0', loop !== 'off' && 'text-primary')}
+            onClick={() => store.setLoopMode(loop === 'off' ? 'all' : loop === 'all' ? 'one' : 'off')} aria-label="Loop">
             <Repeat className="h-3 w-3" />
           </Button>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
-            onClick={() => { deactivate(); navigate('/media-player'); }} aria-label="Open full player">
+            onClick={() => navigate('/media-player')} aria-label="Open full player">
             <Maximize2 className="h-3.5 w-3.5" />
           </Button>
           <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
