@@ -74,6 +74,8 @@ const EarTraining = lazy(() => import("./pages/tools/EarTraining"));
 const HeadphoneGuide = lazy(() => import("./pages/tools/HeadphoneGuide"));
 const AudioMerger = lazy(() => import("./pages/tools/AudioMerger"));
 const AudioSplitter = lazy(() => import("./pages/tools/AudioSplitter"));
+const VideoMerger = lazy(() => import("./pages/tools/VideoMerger"));
+const VideoSplitter = lazy(() => import("./pages/tools/VideoSplitter"));
 
 
 
@@ -143,6 +145,8 @@ const App = () => {
                 <Route path="/video-converter" element={<VideoConverter />} />
                 <Route path="/video-mute" element={<VideoMute />} />
                 <Route path="/video-to-audio" element={<VideoToAudio />} />
+                <Route path="/video-merger" element={<VideoMerger />} />
+                <Route path="/video-splitter" element={<VideoSplitter />} />
 
                 {/* Signal Generators */}
                 <Route path="/tone-generator" element={<ToneGenerator />} />

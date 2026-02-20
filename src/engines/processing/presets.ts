@@ -247,6 +247,19 @@ export function audioMergeArgs(
   }
 }
 
+// ── Video merge (concat demuxer with re-encoding) ──
+
+export function videoMergeArgs(
+  fileListName: string,
+  outputName: string,
+  format: string
+): string[] {
+  if (format === 'webm') {
+    return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-c:v', 'libvpx-vp9', '-crf', '30', '-b:v', '0', '-c:a', 'libopus', outputName];
+  }
+  return ['-f', 'concat', '-safe', '0', '-i', fileListName, '-c:v', 'libx264', '-crf', '23', '-preset', 'fast', '-c:a', 'aac', outputName];
+}
+
 // ── Gain injection utility ──
 
 export function injectGainFilter(args: string[], gainDb: number): string[] {
