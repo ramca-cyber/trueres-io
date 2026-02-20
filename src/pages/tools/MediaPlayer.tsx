@@ -540,13 +540,13 @@ export default function MediaPlayer() {
 
               {isAudioTrack && showSpectrum && analyserNode && (
                 <div className="px-4 pb-2">
-                  <LiveSpectrum analyserNode={analyserNode} height={48} barCount={64} />
+                  <LiveSpectrum analyserNode={analyserNode} audioElement={audioRef.current} height={48} barCount={64} />
                 </div>
               )}
 
               {isAudioTrack && showSpectrogram && analyserNode && (
                 <div className="px-4 pb-4">
-                  <LiveSpectrogram analyserNode={analyserNode} height={80} />
+                  <LiveSpectrogram analyserNode={analyserNode} audioElement={audioRef.current} height={80} />
                 </div>
               )}
             </div>

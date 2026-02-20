@@ -34,6 +34,8 @@ export function WaveformSeekbar({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const initialW = el.clientWidth;
+    if (initialW > 0) setCanvasWidth(Math.floor(initialW));
     const obs = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w && w > 0) setCanvasWidth(Math.floor(w));

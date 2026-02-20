@@ -3,12 +3,13 @@ import { cn } from '@/lib/utils';
 
 interface LiveSpectrumProps {
   analyserNode: AnalyserNode | null;
+  audioElement?: HTMLAudioElement | null;
   className?: string;
   height?: number;
   barCount?: number;
 }
 
-export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 48 }: LiveSpectrumProps) {
+export function LiveSpectrum({ analyserNode, audioElement, className, height = 64, barCount = 48 }: LiveSpectrumProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const sizeRef = useRef({ w: 0, h: height });
@@ -17,6 +18,8 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const initialW = canvas.clientWidth;
+    if (initialW > 0) sizeRef.current.w = Math.floor(initialW);
     const obs = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w && w > 0) sizeRef.current.w = Math.floor(w);
@@ -36,10 +39,7 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
 
     const computedStyle = getComputedStyle(document.documentElement);
     const primaryRaw = computedStyle.getPropertyValue('--primary').trim();
-    // Split space-separated HSL "30 83% 63%" into comma-separated for Canvas compatibility
     const [pH, pS, pL] = primaryRaw.split(' ');
-
-    let lastResize = 0;
 
     function draw() {
       rafRef.current = requestAnimationFrame(draw);
@@ -49,7 +49,6 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
       if (w <= 0) return;
       const dpr = window.devicePixelRatio || 1;
 
-      // Only resize canvas when dimensions actually change
       const targetW = w * dpr;
       const targetH = height * dpr;
       if (canvas.width !== targetW || canvas.height !== targetH) {
@@ -78,9 +77,24 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
       }
     }
 
-    draw();
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [analyserNode, height, barCount]);
+    function startLoop() { if (!rafRef.current) draw(); }
+    function stopLoop() { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+
+    const el = audioElement;
+    if (el) {
+      el.addEventListener('play', startLoop);
+      el.addEventListener('pause', stopLoop);
+      if (!el.paused) startLoop();
+    } else {
+      startLoop();
+    }
+
+    return () => {
+      stopLoop();
+      el?.removeEventListener('play', startLoop);
+      el?.removeEventListener('pause', stopLoop);
+    };
+  }, [analyserNode, audioElement, height, barCount]);
 
   return (
     <canvas

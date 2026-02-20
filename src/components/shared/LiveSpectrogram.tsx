@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 
 interface LiveSpectrogramProps {
   analyserNode: AnalyserNode;
+  audioElement?: HTMLAudioElement | null;
   width?: number;
   height?: number;
   className?: string;
@@ -9,6 +10,7 @@ interface LiveSpectrogramProps {
 
 export function LiveSpectrogram({
   analyserNode,
+  audioElement,
   width = 600,
   height = 120,
   className,
@@ -21,6 +23,8 @@ export function LiveSpectrogram({
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    const initialW = el.clientWidth;
+    if (initialW > 0) actualWidthRef.current = Math.floor(initialW);
     const obs = new ResizeObserver((entries) => {
       const w = entries[0]?.contentRect.width;
       if (w && w > 0) actualWidthRef.current = Math.floor(w);
@@ -86,9 +90,24 @@ export function LiveSpectrogram({
       rafRef.current = requestAnimationFrame(draw);
     };
 
-    rafRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [analyserNode, height]);
+    function startLoop() { if (!rafRef.current) rafRef.current = requestAnimationFrame(draw); }
+    function stopLoop() { cancelAnimationFrame(rafRef.current); rafRef.current = 0; }
+
+    const el = audioElement;
+    if (el) {
+      el.addEventListener('play', startLoop);
+      el.addEventListener('pause', stopLoop);
+      if (!el.paused) startLoop();
+    } else {
+      startLoop();
+    }
+
+    return () => {
+      stopLoop();
+      el?.removeEventListener('play', startLoop);
+      el?.removeEventListener('pause', stopLoop);
+    };
+  }, [analyserNode, audioElement, height]);
 
   return (
     <div ref={containerRef} className={className}>
