@@ -1,89 +1,73 @@
 
 
-# Add Audio Merger and Audio Splitter Tools
+# Add Video Merger and Video Splitter Tools
 
 ## Overview
-Two new ffmpeg-based processing tools that handle multi-file concatenation and single-file splitting.
+Two new video processing tools mirroring the existing Audio Merger and Audio Splitter, adapted for video files.
 
 ---
 
-## Tool 1: Audio Merger
+## Tool 1: Video Merger
 
-**Purpose**: Concatenate 2+ audio files into a single output file, in user-defined order.
+**Purpose**: Concatenate 2+ video files into a single output.
 
 **User flow**:
-1. Drop multiple audio files (or add more one by one)
-2. Reorder files via drag handles (same pattern as playlist)
-3. Choose output format (same format selector as Audio Converter)
-4. Optional gain control
-5. Process and download merged file
+1. Drop multiple video files (or add more one by one)
+2. Reorder files via drag handles
+3. Choose output format (MP4 or WebM)
+4. Process and download merged video
 
-**FFmpeg approach**: Use the concat demuxer (`-f concat -safe 0 -i list.txt`) which writes a temporary text file listing inputs. This handles different codecs gracefully and is the standard approach for joining audio.
-
-**New preset function** in `presets.ts`:
-```typescript
-function audioMergeArgs(
-  fileListName: string, 
-  outputName: string, 
-  format: string, 
-  bitrate?: number
-): string[]
-```
+**FFmpeg approach**: Use the concat demuxer with re-encoding to ensure codec compatibility across different input files. The command structure mirrors `audioMergeArgs` but uses video codecs.
 
 ---
 
-## Tool 2: Audio Splitter
+## Tool 2: Video Splitter
 
-**Purpose**: Split one audio file into 2+ segments at user-specified time points.
+**Purpose**: Split one video file into 2+ segments at user-specified time points.
 
 **User flow**:
-1. Drop an audio file
-2. File decodes and shows waveform
-3. Add split points by clicking on the waveform or entering times manually
+1. Drop a video file
+2. Preview video with playback controls
+3. Add split points by entering times manually or grabbing current playback position (same Clock button pattern as VideoTrimmer)
 4. See a list of resulting segments with durations
-5. Process all splits (sequential ffmpeg calls using trim preset)
-6. Download individual segments or all as separate files
+5. Process all splits sequentially using `trimArgs` with `-c copy` (fast, no re-encoding)
+6. Download individual segments or all
 
-**FFmpeg approach**: Reuse the existing `trimArgs()` preset for each segment, running them sequentially. Each segment produces one output file.
-
-**No new preset needed** -- reuses `trimArgs` with computed start/end for each segment.
+**FFmpeg approach**: Reuses existing `trimArgs()` preset for each segment (same as Audio Splitter).
 
 ---
 
 ## Files to Create
 
-### `src/pages/tools/AudioMerger.tsx`
-- Multi-file drop zone (reuse `FileDropZone` with `multiple`)
-- Sortable file list with drag handles, remove buttons, and file info
-- Output format selector (reuse `AUDIO_OUTPUT_FORMATS` from presets)
-- Gain control
-- Progress bar and download button
-- Destructive "Start over" button inline with action buttons
+### `src/pages/tools/VideoMerger.tsx`
+- Multi-file drop zone using `VIDEO_ACCEPT`
+- Drag-and-drop sortable file list (same pattern as AudioMerger)
+- Output format selector using `VIDEO_OUTPUT_FORMATS` from presets
+- Writes all input files to ffmpeg VFS, creates `filelist.txt`, runs concat with re-encoding
+- VideoPlayer preview of output
+- Progress bar, download button, destructive "Start over" inline with actions
 
-### `src/pages/tools/AudioSplitter.tsx`
-- Single file drop zone
-- Interactive waveform with clickable split point markers
-- Manual time input for adding/editing split points
-- List of resulting segments with computed durations
-- Sequential processing with per-segment progress
+### `src/pages/tools/VideoSplitter.tsx`
+- Single file drop zone using `VIDEO_ACCEPT`
+- VideoPlayer with ref for currentTime access
+- Manual time input + "set to current time" Clock button (same as VideoTrimmer)
+- Split point list with segment durations and remove buttons
+- Sequential `trimArgs` processing for each segment
 - Download individual segments or "Download All"
-- Destructive "Start over" button inline with action buttons
+- Destructive "Start over" inline with actions
 
 ---
 
 ## Files to Modify
 
 ### `src/engines/processing/presets.ts`
-- Add `audioMergeArgs()` function for the concat demuxer approach
-- Add `audioSplitArgs()` helper that generates trim args for each segment
+- Add `videoMergeArgs()` function for concat demuxer with video re-encoding (libx264 + aac for MP4, libvpx-vp9 + libopus for WebM)
 
 ### `src/config/tool-registry.ts`
-- Add `audio-merger` tool definition in the Audio Processing category
-- Add `audio-splitter` tool definition in the Audio Processing category
+- Add `video-merger` and `video-splitter` tool definitions in the Video Processing category
 
 ### `src/App.tsx`
-- Add lazy imports for `AudioMerger` and `AudioSplitter`
-- Add routes: `/audio-merger` and `/audio-splitter`
+- Add lazy imports and routes for `/video-merger` and `/video-splitter`
 
 ### `src/config/tool-faqs.ts`
 - Add FAQ entries for both new tools
@@ -92,23 +76,26 @@ function audioMergeArgs(
 
 ## Technical Details
 
-### Merger - concat demuxer approach
-The ffmpeg concat demuxer requires writing a file list to the virtual filesystem:
-```
-file 'input1.mp3'
-file 'input2.mp3'
-```
-Then: `-f concat -safe 0 -i filelist.txt -c copy output.mp3` (copy mode when formats match) or with re-encoding when output format differs from inputs.
+### Merger - concat with re-encoding
+Unlike audio where codec-copy sometimes works, video files almost always have different codecs/resolutions, so re-encoding is required:
+- MP4 output: `-c:v libx264 -crf 23 -c:a aac`
+- WebM output: `-c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus`
 
-The merger page will write all input files to ffmpeg's VFS, create the file list, run the command, and clean up.
+### Splitter - codec copy for speed
+Video splitting uses `-c copy` (the existing `trimArgs` default) for near-instant splitting without quality loss. This is the same approach used by VideoTrimmer.
 
-### Splitter - sequential trim calls
-For N split points, produces N+1 segments. Each segment uses the existing `trimArgs(input, output, start, end)` preset. Files are processed sequentially (ffmpeg.wasm limitation) and collected into an array of blobs for individual or batch download.
+### Preset function
+```typescript
+function videoMergeArgs(
+  fileListName: string,
+  outputName: string,
+  format: string
+): string[]
+```
 
 ### UI patterns followed
-- Same `FileDropZone`, `FileInfoBar`, `AudioPlayer`, `ProgressBar`, `DownloadButton` shared components
-- Same `useFFmpeg` hook for processing
-- Same destructive button styling for "Start over"
-- Same caching pattern with `cacheFile`/`getCachedFile`
-- Same settings persistence with `useToolSettingsStore`
+- Same shared components: FileDropZone, FileInfoBar, VideoPlayer, ProgressBar, DownloadButton
+- Same destructive button styling and placement
+- Same ffmpeg VFS file management pattern
+- Same sequential processing pattern for splitter (ffmpeg.wasm single-process limitation)
 
