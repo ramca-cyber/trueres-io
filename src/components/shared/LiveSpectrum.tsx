@@ -35,7 +35,9 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
     const dataArray = new Uint8Array(bufferLength);
 
     const computedStyle = getComputedStyle(document.documentElement);
-    const primaryHSL = computedStyle.getPropertyValue('--primary').trim();
+    const primaryRaw = computedStyle.getPropertyValue('--primary').trim();
+    // Split space-separated HSL "30 83% 63%" into comma-separated for Canvas compatibility
+    const [pH, pS, pL] = primaryRaw.split(' ');
 
     let lastResize = 0;
 
@@ -71,7 +73,7 @@ export function LiveSpectrum({ analyserNode, className, height = 64, barCount = 
         const barHeight = (avg / 255) * height * 0.9;
         const alpha = 0.3 + (avg / 255) * 0.7;
 
-        ctx.fillStyle = `hsla(${primaryHSL}, ${alpha})`;
+        ctx.fillStyle = `hsla(${pH}, ${pS}, ${pL}, ${alpha})`;
         ctx.fillRect(i * barWidth + 1, height - barHeight, barWidth - 2, barHeight);
       }
     }
